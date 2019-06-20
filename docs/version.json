@@ -1,1 +1,22 @@
-mt
+{
+        "Comment": "Last updated: 06/19/2019",
+        "copyright": " &#9400; 2019 csteele",
+        "author": "C Steele",
+        "versions": {
+                "Application": {
+                },
+                "Driver": {
+                        "wx-ApiXU-Driver": "v1.1.6"
+                },
+
+                "UpdateInfo": {
+                        "Application": {
+                        },
+                        "Driver": {
+                        "wx-ApiXU-Driver": "Updated 06/19/2019"
+                        }
+                }
+        }
+}
+
+
