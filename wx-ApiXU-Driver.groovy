@@ -6,9 +6,12 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.1.6"  }
+public static String version()      {  return "v1.1.7"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.1.7
+ *                Correction for "java.lang.ClassCastException" found by halfrican.ak.
  *
  * Version: 1.1.6
  *                Semaphore protecting sunrise/set poll if Apixu poll is incomplete.
@@ -119,6 +122,9 @@ metadata    {
 		attribute "precipDayPlus2", "string"	// precipExtended   |
 	
 		command "WipeState"			// **---** delete for Release
+		command "WipeForecastPrecip"		// **---** delete for Release
+		command "updateLux"			// **---** delete for Release
+		command "pollSunRiseSet"			// **---** delete for Release
 		command "refresh"
  	}
 
@@ -153,6 +159,18 @@ def refresh()	{ poll() }
     	log.warn "Wiping Weather Data"
     	state.clear()
     	unschedule()
+    }
+    
+    def WipeForecastPrecip() {
+    	log.warn "Wiping Forecast Precip Data"
+    	state.forecastPrecip = [
+    	    date: null,
+    	    precipDayMinus2: [inch: 999.9, mm: 999.9],
+    	    precipDayMinus1: [inch: 999.9, mm: 999.9],
+    	    precipDay0: 	   [inch: 999.9, mm: 999.9],
+    	    precipDayPlus1:  [inch: 999.9, mm: 999.9],
+    	    precipDayPlus2:  [inch: 999.9, mm: 999.9]
+    	]
     }
 // **---** ^^^
 
@@ -305,7 +323,6 @@ def pollHandler(resp, data) {
 		doPoll(obs)		// parse the data returned by ApiXU
 	} else {
 		log.error "wx-ApiXU weather api did not return data: $resp"
-		return null
 	}
 }
 
@@ -324,7 +341,6 @@ def pollSunRiseSet() {
 		asynchttpGet("sunRiseSetHandler", requestParams)
 	} else {
 		log.error "wx-ApiXU no sunrise-sunset without Lat/Long."
-		return null
 	}
 }
 
@@ -340,7 +356,6 @@ def sunRiseSetHandler(resp, data) {
 		return true
 	} else {
 		log.error "wx-ApiXU sunrise-sunset api did not return data: $resp"
-		return null
 	}
 }
 
