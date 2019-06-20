@@ -340,7 +340,7 @@ def sunRiseSetHandler(resp, data) {
 		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunset).format("HH:mm")
 		state.twiBegin = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.astronomical_twilight_begin).format("HH:mm")
 		state.twiEnd   = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.astronomical_twilight_end).format("HH:mm")
-		return true
+//		return true
 	} else {
 		log.error "wx-ApiXU sunrise-sunset api did not return data: $resp"
 	}
