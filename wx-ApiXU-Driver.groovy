@@ -122,9 +122,6 @@ metadata    {
 		attribute "precipDayPlus2", "string"	// precipExtended   |
 	
 		command "WipeState"			// **---** delete for Release
-		command "WipeForecastPrecip"		// **---** delete for Release
-		command "updateLux"			// **---** delete for Release
-		command "pollSunRiseSet"			// **---** delete for Release
 		command "refresh"
  	}
 
@@ -161,17 +158,7 @@ def refresh()	{ poll() }
     	unschedule()
     }
     
-    def WipeForecastPrecip() {
-    	log.warn "Wiping Forecast Precip Data"
-    	state.forecastPrecip = [
-    	    date: null,
-    	    precipDayMinus2: [inch: 999.9, mm: 999.9],
-    	    precipDayMinus1: [inch: 999.9, mm: 999.9],
-    	    precipDay0: 	   [inch: 999.9, mm: 999.9],
-    	    precipDayPlus1:  [inch: 999.9, mm: 999.9],
-    	    precipDayPlus2:  [inch: 999.9, mm: 999.9]
-    	]
-    }
+
 // **---** ^^^
 
 /*
