@@ -93,7 +93,7 @@ public static String version()      {  return "v1.1.7"  }
 import groovy.transform.Field
 
 metadata    {
- 	definition (name: "wx-ApiXU-Driver", namespace: "csteele", author: "bangali, csteele")  {
+ 	definition (name: "wx-ApiXU-Driver", namespace: "csteele", author: "bangali, csteele", importUrl: "https://raw.githubusercontent.com/HubitatCommunity/wx-ApiXU/master/wx-ApiXU-Driver.groovy")  {
  		capability "Actuator"
  		capability "Sensor"
  		capability "Polling"
