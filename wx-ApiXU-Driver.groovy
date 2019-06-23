@@ -6,10 +6,11 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.1.7"  }
+public static String version()      {  return "v1.1.8"  }
 
 /***********************************************************************************************************************
  *
+ * Version: 1.1.8
  * Version: 1.1.7
  *                Correction for "java.lang.ClassCastException" found by halfrican.ak.
  *
@@ -121,8 +122,10 @@ metadata    {
 		attribute "precipDayPlus1", "string"	// precipExtended   |
 		attribute "precipDayPlus2", "string"	// precipExtended   |
 	
-		command "WipeState"			// **---** delete for Release
 		command "refresh"
+//		command "WipeState"			// **---** delete for Release
+//		command "updateLux"			// **---** delete for Release
+//		command "pollSunRiseSet"			// **---** delete for Release
  	}
 
 	def settingDescr = settingEnable ? "<br><i>Hide many of the Preferences to reduce the clutter, if needed, by turning OFF this toggle.</i><br>" : "<br><i>Many Preferences are available to you, if needed, by turning ON this toggle.</i><br>"
@@ -150,7 +153,7 @@ metadata    {
 def refresh()	{ poll() }
 
 
-// **---** delete for Release
+/* **---** delete for Release
     def WipeState() 
     {
     	log.warn "Wiping Weather Data"
@@ -158,8 +161,7 @@ def refresh()	{ poll() }
     	unschedule()
     }
     
-
-// **---** ^^^
+// **---** ^^^ */
 
 /*
 	updated
@@ -182,7 +184,7 @@ def updated()   {
 	poll()
 	if (descTextEnable) log.info "Updated with settings: ${settings}, $state.sunRiseSet"
 	updateCheck()
-	runIn(2, pollSunRiseSet)
+	runIn(2, pollSunRiseSet) 
 }
 
 
@@ -235,7 +237,7 @@ def doPoll(obs) {
 	sendEventPublish(name: "country", value: obs.location.country, displayed: true)
 	sendEventPublish(name: "feelsLike", value: (isFahrenheit ? obs.current.feelslike_f : obs.current.feelslike_c), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
 	sendEventPublish(name: "forecastIcon", value: getWUIconName(obs.current.condition.code, obs.current.is_day), displayed: true)
-	sendEventPublish(name: "humidity", value: obs.current.humidity, unit: "%", displayed: true)
+	sendEventPublish(name: "humidity", value: obs.current.humidity.toFloat(), unit: "%", displayed: true)
 	sendEventPublish(name: "is_day", value: obs.current.is_day, displayed: true)
 	sendEventPublish(name: "last_updated_epoch", value: obs.current.last_updated_epoch, displayed: true)
 	sendEventPublish(name: "last_updated", value: obs.current.last_updated, displayed: true)
@@ -245,12 +247,13 @@ def doPoll(obs) {
 	sendEventPublish(name: "location", value: obs.location.name + ', ' + obs.location.region, displayed: true)
 	sendEventPublish(name: "name", value: obs.location.name, displayed: true)
 	sendEventPublish(name: "percentPrecip", value: (isFahrenheit ? obs.current.precip_in : obs.current.precip_mm), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEventPublish(name: "pressure", value: (isFahrenheit ? obs.current.pressure_in : obs.current.pressure_mb), unit: "${(isFahrenheit ? 'IN' : 'MBAR')}", displayed: true)
+	sendEventPublish(name: "pressure", value: (isFahrenheit ? obs.current.pressure_in.toFloat() : obs.current.pressure_mb.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MBAR')}", displayed: true)
 	sendEventPublish(name: "region", value: obs.location.region, displayed: true)
-	sendEventPublish(name: "temperature", value: (isFahrenheit ? obs.current.temp_f : obs.current.temp_c), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
+	sendEventPublish(name: "temperature", value: (isFahrenheit ? obs.current.temp_f.toFloat() : obs.current.temp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
 	sendEventPublish(name: "twilight_begin", value: state.twiBegin, descriptionText: "Twilight begins today at $state.twiBegin", displayed: true)
 	sendEventPublish(name: "twilight_end", value: state.twiEnd, descriptionText: "Twilight ends today at $state.twiEnd", displayed: true)	
 	sendEventPublish(name: "tz_id", value: obs.location.tz_id, displayed: true)
+	sendEventPublish(name: "uvIndex", value: obs.current.uv.toFloat(), displayed: true)
 	sendEventPublish(name: "visual", value: '<img src=' + imgName + '>', displayed: true)
 	sendEventPublish(name: "visualDayPlus1", value: '<img src=' + imgNamePlus1 + '>', displayed: true)
 	sendEventPublish(name: "visualDayPlus1WithText", value: '<img src=' + imgNamePlus1 + '><br>' + obs.forecast.forecastday[0].day.condition.text, displayed: true)
@@ -307,6 +310,7 @@ def poll() {
 def pollHandler(resp, data) {
 	if(resp.getStatus() == 200 || resp.getStatus() == 207) {
 		obs = parseJson(resp.data)
+    //    	if (debugOutput) log.debug "wx-ApiXU returned: $obs"
 		doPoll(obs)		// parse the data returned by ApiXU
 	} else {
 		log.error "wx-ApiXU weather api did not return data: $resp"
@@ -335,12 +339,12 @@ def pollSunRiseSet() {
 def sunRiseSetHandler(resp, data) {
 	if(resp.getStatus() == 200 || resp.getStatus() == 207) {
 		state.sunRiseSet = resp.getJson().results
-	//if (debugOutput) log.debug "sunRiseSet: $state.sunRiseSet"
+		state.sunRiseSet.init = true
+		//if (debugOutput) log.debug "sunRiseSet: $state.sunRiseSet"
 		state.localSunrise = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunrise).format("HH:mm")
 		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunset).format("HH:mm")
 		state.twiBegin = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.astronomical_twilight_begin).format("HH:mm")
 		state.twiEnd   = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.astronomical_twilight_end).format("HH:mm")
-//		return true
 	} else {
 		log.error "wx-ApiXU sunrise-sunset api did not return data: $resp"
 	}
@@ -355,11 +359,15 @@ def sunRiseSetHandler(resp, data) {
 	Notes: minimum Lux is a value of 5 after dark.
 */
 def updateLux()     {
-	if (state?.sunRiseSet == null) { if (descTextEnable) log.info "no wx-ApiXU lux without sunRiseSet value."; return }
-	if (descTextEnable) log.info "wx-ApiXU lux calc for: $zipCode" // ", $state.loc_lat, $state.localSunset"	
-	def lux = estimateLux(state.condition_code, state.cloud)
-	sendEventPublish(name: "illuminance", value: lux, unit: "lux", displayed: true)
-	sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
+	if (state?.sunRiseSet?.init) { 
+		if (descTextEnable) log.info "wx-ApiXU lux calc for: $zipCode" // ", $state.loc_lat, $state.localSunset"	
+		def lux = estimateLux(state.condition_code, state.cloud)
+		sendEventPublish(name: "illuminance", value: lux.toInteger(), unit: "lux", displayed: true)
+		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
+	} else {
+		if (descTextEnable) log.info "no wx-ApiXU lux without sunRiseSet value."
+		pollSunRiseSet()
+	}
 }
 
 
@@ -429,13 +437,14 @@ def estimateLux(condition_code, cloud)     {
 /*
 	calcTime
 
-	Purpose: calculate all the sunrise, sunset, twilight, etc. values, once each day.
+	Purpose: calculate display data from each observation (aka: obs/wxData).
 	
 */
 def calcTime(wxData) {
 	state.condition_code = wxData.current.condition.code
 	state.cloud = wxData.current.cloud
-	// with sun rise/set being async and once a day, 'obs' (wxdata) won't be available. Lat + long needs to be saved.
+	// with sun rise/set being async and once a day, 'obs' (wxdata) won't be available
+	// to that method. Lat + long needs to be saved.
 	state.loc_lat   = wxData.location.lat ?: location.latitude
 	state.loc_lon   = wxData.location.lon ?: location.longitude
 	state.tz_id     = wxData.location.tz_id
@@ -515,7 +524,18 @@ def installed() {
 
 
 def forecastPrecip(forecast)	{
-	if (state.thisDate == state?.forecastPrecip?.date || state?.sunRiseSet == null || !precipExtendedPublish) { if (descTextEnable) log.info "skip wx-ApiXU forecast precip"; return }
+	if (state?.forecastPrecip?.init == null) {
+	    state.forecastPrecip = [
+    	    	date: null,
+    	    	precipDayMinus2: [inch: 999.9, mm: 999.9],
+    	    	precipDayMinus1: [inch: 999.9, mm: 999.9],
+    	    	precipDay0:	     [inch: 999.9, mm: 999.9],
+    	    	precipDayPlus1:  [inch: 999.9, mm: 999.9],
+    	    	precipDayPlus2:  [inch: 999.9, mm: 999.9],
+    	    	init:            true
+    	   ]
+	}
+	if (state.thisDate == state.forecastPrecip.date || state?.sunRiseSet == null || !precipExtendedPublish) { if (descTextEnable) log.info "skip wx-ApiXU forecast precip"; return }
 
 	state.forecastPrecip.date = state.thisDate
 	state.forecastPrecip.precipDayMinus2 = state.forecastPrecip.precipDayMinus1
@@ -665,6 +685,7 @@ def getImgName(wCode, is_day)       {
 	"twilight_begin":			[title: "Twilight begin", descr: "", default: "false"],
 	"twilight_end":			[title: "Twilight end", descr: "", default: "false"],
 	"tz_id":				[title: "Timezone ID", descr: "", default: "false"],
+	"uvIndex":				[title: "Ultraviolet Index", descr: "", default: "false"],
 	"vis_km":				[title: "Visibility KM", descr: "", default: "false"],
 	"vis_miles":			[title: "Visibility miles", descr: "", default: "false"],
 	"visual":				[title: "Visual weather", descr: "Select to display the Image of the Weather", default: "true"],
