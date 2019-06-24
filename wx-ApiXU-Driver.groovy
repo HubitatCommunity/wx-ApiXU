@@ -10,7 +10,7 @@ public static String version()      {  return "v1.2.0"  }
 
 /***********************************************************************************************************************
  *
- * Version: 1.2.0
+ * Version: 1.2.0 
  *                Update Attributes to send correct type (Number, String) 
  *                 - potential to break user's automation
  *
