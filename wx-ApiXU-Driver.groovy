@@ -6,9 +6,13 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.1.9"  }
+public static String version()      {  return "v1.2.0"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.2.0
+ *                Update Attributes to send correct type (Number, String) 
+ *                 - potential to break user's automation
  *
  * Version: 1.1.9
  *                Update Attributes for the defined Capabilities (no longer selectable)
@@ -109,21 +113,32 @@ metadata    {
 	
 		attributesMap.each
 		{
-			k, v -> attribute "${k}", "string"
+			k, v -> if (v.typeof) attribute "${k}", "${v.typeof}"
 		}
 
 	// some attributes are 'doubled' due to spelling differences, such as wind_dir & windDirection
 	//  the additional doubled attributes are added here:
-		attribute "windDirection", "string"		// open_weatherPublish  related
-		attribute "windSpeed", "string"		// open_weatherPublish    |
+		attribute "windDirection", "number"		// open_weatherPublish  related
+		attribute "windSpeed", "number"		// open_weatherPublish    |
 		attribute "weatherIcons", "string"		// open_weatherPublish    |
 
 	// some attributes are in a 'group' of similar, under a single selector
-		attribute "precipDayMinus2", "string"	// precipExtended related
-		attribute "precipDayMinus1", "string"	// precipExtended   |
-		attribute "precipDay0", "string"		// precipExtended   |
-		attribute "precipDayPlus1", "string"	// precipExtended   |
-		attribute "precipDayPlus2", "string"	// precipExtended   |
+		attribute "precipDayMinus2", "number"	// precipExtended related
+		attribute "precipDayMinus1", "number"	// precipExtended   |
+		attribute "precipDay0",      "number"	// precipExtended   |
+		attribute "precipDayPlus1",  "number"	// precipExtended   |
+		attribute "precipDayPlus2",  "number"	// precipExtended   |
+		
+		attribute "local_sunrise",   "string"	// localSunrisePublish related
+		attribute "local_sunset",    "string"	// localSunrisePublish   |
+		attribute "localSunrise",    "string"	// localSunrisePublish   |
+		attribute "localSunset",     "string"	// localSunrisePublish   |
+
+		attribute "lat",             "number"	// latPublish related
+		attribute "lon",             "number"	// latPublish   |
+
+		attribute "temperatureHighDayPlus1", "number"  // tempHiLowPublish related
+		attribute "temperatureLowDayPlus1",  "number"  // tempHiLowPublish   |
 	
 		command "refresh"
 //		command "WipeState"			// **---** delete for Release
@@ -218,43 +233,43 @@ def doPoll(obs) {
 	if (open_weatherPublish) {
 		if (debugOutput) log.debug "open_weather Group"
 		sendEvent(name: "weatherIcons", value: getOWIconName(obs.current.condition.code, obs.current.is_day), displayed: true)
-		sendEvent(name: "windSpeed", value: (isFahrenheit ? obs.current.wind_mph : obs.current.wind_kph), displayed: true)
-		sendEvent(name: "windDirection", value: obs.current.wind_degree, displayed: true)
+		sendEvent(name: "windSpeed", value: (isFahrenheit ? obs.current.wind_mph.toFloat() : obs.current.wind_kph.toFloat()), displayed: true)
+		sendEvent(name: "windDirection", value: obs.current.wind_degree.toInteger(), displayed: true)
 	}
 	if (tempHiLowPublish) {
 		if (debugOutput) log.debug "temp+1 Hi/Lo Group"
-		sendEvent(name: "temperatureHighDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.maxtemp_f :
-	                        obs.forecast.forecastday[0].day.maxtemp_c), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
-		sendEvent(name: "temperatureLowDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.mintemp_f :
-                            obs.forecast.forecastday[0].day.mintemp_c), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
+		sendEvent(name: "temperatureHighDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.maxtemp_f.toFloat() :
+	                        obs.forecast.forecastday[0].day.maxtemp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
+		sendEvent(name: "temperatureLowDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.mintemp_f.toFloat() :
+                            obs.forecast.forecastday[0].day.mintemp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
 	}
 
 	if (latPublish) { // latitude and longitude group
 		if (debugOutput) log.debug "Lat/Long Group"
-		sendEvent(name: "lat", value: obs.location.lat, displayed: true)
-		sendEvent(name: "lon", value: obs.location.lon, displayed: true)
+		sendEvent(name: "lat", value: obs.location.lat.toFloat(), displayed: true)
+		sendEvent(name: "lon", value: obs.location.lon.toFloat(), displayed: true)
 	}
 
 	sendEventPublish(name: "city", value: (cityName ?: obs.location.name), displayed: true)
-	sendEventPublish(name: "cloud", value: obs.current.cloud, unit: "%", displayed: true)
-	sendEventPublish(name: "condition_code", value: obs.current.condition.code, displayed: true)
-	sendEventPublish(name: "condition_codeDayPlus1", value: obs.forecast.forecastday[0].day.condition.code, displayed: true)
+	sendEventPublish(name: "cloud", value: obs.current.cloud.toInteger(), unit: "%", displayed: true)
+	sendEventPublish(name: "condition_code", value: obs.current.condition.code.toInteger(), displayed: true)
+	sendEventPublish(name: "condition_codeDayPlus1", value: obs.forecast.forecastday[0].day.condition.code.toInteger(), displayed: true)
 	sendEventPublish(name: "condition_icon_only", value: obs.current.condition.icon.split("/")[-1], displayed: true)
 	sendEventPublish(name: "condition_icon_url", value: 'https:' + obs.current.condition.icon, displayed: true)
 	sendEventPublish(name: "condition_icon", value: '<img src=https:' + obs.current.condition.icon + '>', displayed: true)
 	sendEventPublish(name: "condition_text", value: obs.current.condition.text, displayed: true)
 	sendEventPublish(name: "country", value: obs.location.country, displayed: true)
-	sendEventPublish(name: "feelsLike", value: (isFahrenheit ? obs.current.feelslike_f : obs.current.feelslike_c), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
+	sendEventPublish(name: "feelsLike", value: (isFahrenheit ? obs.current.feelslike_f.toFloat() : obs.current.feelslike_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
 	sendEventPublish(name: "forecastIcon", value: getWUIconName(obs.current.condition.code, obs.current.is_day), displayed: true)
-	sendEventPublish(name: "is_day", value: obs.current.is_day, displayed: true)
-	sendEventPublish(name: "last_updated_epoch", value: obs.current.last_updated_epoch, displayed: true)
+	sendEventPublish(name: "is_day", value: obs.current.is_day.toInteger(), displayed: true)
+	sendEventPublish(name: "last_updated_epoch", value: obs.current.last_updated_epoch.toInteger(), displayed: true)
 	sendEventPublish(name: "last_updated", value: obs.current.last_updated, displayed: true)
 	sendEventPublish(name: "local_date", value: state.thisDate, displayed: true)
 	sendEventPublish(name: "local_time", value: state.thisTime, displayed: true)
-	sendEventPublish(name: "localtime_epoch", value: obs.location.localtime_epoch, displayed: true)
+	sendEventPublish(name: "localtime_epoch", value: obs.location.localtime_epoch.toInteger(), displayed: true)
 	sendEventPublish(name: "location", value: obs.location.name + ', ' + obs.location.region, displayed: true)
 	sendEventPublish(name: "name", value: obs.location.name, displayed: true)
-	sendEventPublish(name: "percentPrecip", value: (isFahrenheit ? obs.current.precip_in : obs.current.precip_mm), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
+	sendEventPublish(name: "percentPrecip", value: (isFahrenheit ? obs.current.precip_in.toFloat() : obs.current.precip_mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
 	sendEventPublish(name: "region", value: obs.location.region, displayed: true)
 	sendEventPublish(name: "twilight_begin", value: state.twiBegin, descriptionText: "Twilight begins today at $state.twiBegin", displayed: true)
 	sendEventPublish(name: "twilight_end", value: state.twiEnd, descriptionText: "Twilight ends today at $state.twiEnd", displayed: true)	
@@ -264,23 +279,23 @@ def doPoll(obs) {
 	sendEventPublish(name: "visualDayPlus1WithText", value: '<img src=' + imgNamePlus1 + '><br>' + obs.forecast.forecastday[0].day.condition.text, displayed: true)
 	sendEventPublish(name: "visualWithText", value: '<img src=' + imgName + '><br>' + obs.current.condition.text, displayed: true)
 	sendEventPublish(name: "weather", value: obs.current.condition.text, displayed: true)
-	sendEventPublish(name: "wind_degree", value: obs.current.wind_degree, unit: "DEGREE", displayed: true)
+	sendEventPublish(name: "wind_degree", value: obs.current.wind_degree.toInteger(), unit: "DEGREE", displayed: true)
 	sendEventPublish(name: "wind_dir", value: obs.current.wind_dir, displayed: true)
 	sendEventPublish(name: "wind_mytile", value: wind_mytile, displayed: true)
-	sendEventPublish(name: "wind", value: (isFahrenheit ? obs.current.wind_mph : obs.current.wind_kph), unit: "${(isFahrenheit ? 'MPH' : 'KPH')}", displayed: true)
+	sendEventPublish(name: "wind", value: (isFahrenheit ? obs.current.wind_mph.toFloat() : obs.current.wind_kph.toFloat()), unit: "${(isFahrenheit ? 'MPH' : 'KPH')}", displayed: true)
 
 	if (isFahrenheit)	{
-		sendEventPublish(name: "wind_mph", value: obs.current.wind_mph, unit: "MPH", displayed: true)
-		sendEventPublish(name: "precip_in", value: obs.current.precip_in, unit: "IN", displayed: true)
-		sendEventPublish(name: "feelslike_f", value: obs.current.feelslike_f, unit: "F", displayed: true)
-		sendEventPublish(name: "vis_miles", value: obs.current.vis_miles, unit: "MILES", displayed: true)
+		sendEventPublish(name: "wind_mph", value: obs.current.wind_mph.toFloat(), unit: "MPH", displayed: true)
+		sendEventPublish(name: "precip_in", value: obs.current.precip_in.toFloat(), unit: "IN", displayed: true)
+		sendEventPublish(name: "feelslike_f", value: obs.current.feelslike_f.toFloat(), unit: "F", displayed: true)
+		sendEventPublish(name: "vis_miles", value: obs.current.vis_miles.toFloat(), unit: "MILES", displayed: true)
 	}
 	else {
-		sendEventPublish(name: "wind_kph", value: obs.current.wind_kph, unit: "KPH", displayed: true)
-		sendEventPublish(name: "wind_mps", value: ((obs.current.wind_kph / 3.6f).round(1)), unit: "MPS", displayed: true)
-		sendEventPublish(name: "precip_mm", value: obs.current.precip_mm, unit: "MM", displayed: true)
-		sendEventPublish(name: "feelsLike_c", value: obs.current.feelslike_c, unit: "C", displayed: true)
-		sendEventPublish(name: "vis_km", value: obs.current.vis_km, unit: "KM", displayed: true)
+		sendEventPublish(name: "wind_kph", value: obs.current.wind_kph.toFloat(), unit: "KPH", displayed: true)
+		sendEventPublish(name: "wind_mps", value: ((obs.current.wind_kph / 3.6f).round(1).toFloat()), unit: "MPS", displayed: true)
+		sendEventPublish(name: "precip_mm", value: obs.current.precip_mm.toFloat(), unit: "MM", displayed: true)
+		sendEventPublish(name: "feelsLike_c", value: obs.current.feelslike_c.toFloat(), unit: "C", displayed: true)
+		sendEventPublish(name: "vis_km", value: obs.current.vis_km.toFloat(), unit: "KM", displayed: true)
 	}
 
 	sendEventPublish(name: "mytile", value: mytext, displayed: true)
@@ -467,6 +482,7 @@ def calcTime(wxData) {
 	mytext += '<br>' + state?.localSunrise + ' <img style="height:2em" src=' + imgName + '> ' + state?.localSunset
 	mytext += (wind_mytile == (isFahrenheit ? "0 mph " : "0 kph ") ? '<br> Wind is calm' : '<br>' + wxData.current.wind_dir + ' ' + wind_mytile)
 	mytext += '<br>' + wxData.current.condition.text
+	//if (debugOutput) log.debug "mytext: $mytext"
 }
 
 
@@ -552,11 +568,11 @@ def forecastPrecip(forecast)	{
 	state.forecastPrecip.precipDayPlus2.inch = forecast.forecastday[1].day.totalprecip_in
 
 	if (debugOutput) log.debug "Extended Precip Group"
-	sendEvent(name: "precipDayMinus2", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus2.inch : state.forecastPrecip.precipDayMinus2.mm), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEvent(name: "precipDayMinus1", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus1.inch : state.forecastPrecip.precipDayMinus1.mm), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEvent(name: "precipDay0", value: (isFahrenheit ? state.forecastPrecip.precipDay0.inch : state.forecastPrecip.precipDay0.mm), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEvent(name: "precipDayPlus1", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus1.inch : state.forecastPrecip.precipDayPlus1.mm), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEvent(name: "precipDayPlus2", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus2.inch : state.forecastPrecip.precipDayPlus2.mm), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
+	sendEvent(name: "precipDayMinus2", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus2.inch.toFloat() : state.forecastPrecip.precipDayMinus2.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
+	sendEvent(name: "precipDayMinus1", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus1.inch.toFloat() : state.forecastPrecip.precipDayMinus1.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
+	sendEvent(name: "precipDay0", value: (isFahrenheit ? state.forecastPrecip.precipDay0.inch.toFloat() : state.forecastPrecip.precipDay0.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
+	sendEvent(name: "precipDayPlus1", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus1.inch.toFloat() : state.forecastPrecip.precipDayPlus1.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
+	sendEvent(name: "precipDayPlus2", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus2.inch.toFloat() : state.forecastPrecip.precipDayPlus2.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
 }
 
 
@@ -650,61 +666,56 @@ def getImgName(wCode, is_day)       {
 
 
 @Field static attributesMap = [
-	"cCF":				[title: "Cloud cover factor", descr: "", default: "false"],
-	"city":				[title: "City", descr: "Display your City's name?", default: "true"],
-	"cloud":				[title: "Cloud", descr: "", default: "false"],
-	"condition_code":			[title: "Condition code", descr: "", default: "false"],
-	"condition_icon_only":		[title: "Condition icon only", descr: "", default: "false"],
-	"condition_icon_url":		[title: "Condition icon URL", descr: "", default: "false"],
-	"condition_icon":			[title: "Condition icon", descr: "", default: "false"],
-	"condition_text":			[title: "Condition text", descr: "", default: "false"],
-	"country":				[title: "Country", descr: "", default: "false"],
-	"dashClock":			[title: "Clock", descr: "Flash time ':' every 2 seconds?", default: "false"],
-	"feelslike_c":			[title: "Feels like °C", descr: "Select to display the 'feels like' temperature in C:", default: "true"],
-	"feelslike_f":			[title: "Feels like °F", descr: "Select to display the 'feels like' temperature in F:", default: "true"],
-	"feelslike":			[title: "Feels like (in default unit)", descr: "Select to display the 'feels like' temperature:", default: "true"],
-	"forecastIcon":			[title: "Forecast icon", descr: "Select to display an Icon of the Forecast Weather:", default: "true"],
-//	"humidity":				[title: "Humidity", descr: "Select to display the Humidity:", default: "true"],
-//	"illuminance":			[title: "Illuminance", descr: "Lux value only", default: "true"],
-	"illuminated":			[title: "Illuminated", descr: "Illuminance with 'lux' added for use on a Dashboard", default: "true"],
-	"is_day":				[title: "Is daytime", descr: "", default: "false"],
-	"last_updated_epoch":		[title: "Last updated epoch", descr: "", default: "false"],
-	"last_updated":			[title: "Last updated", descr: "", default: "false"],
-	"lat":				[title: "Latitude and Longitude", descr: "Select to display both Latitude and Longitude", default: "false"],
-	"local_date":			[title: "Local date", descr: "", default: "false"],
-	"localSunrise":			[title: "Local Sun Rise and Set", descr: "Select to display the Group of 'Time of Local Sunrise and Sunset,' with and without Dashboard text", default: "true"],
-	"local_time":			[title: "Local time", descr: "", default: "false"],
-	"localtime_epoch":		[title: "Localtime epoch", descr: "", default: "false"],
-	"location":				[title: "Location name with region", descr: "", default: "false"],
-	"mytile":				[title: "Mytile for dashboard", descr: "", default: "false"],
-	"name":				[title: "Location name", descr: "", default: "false"],
-	"open_weather":			[title: "OpenWeather attributes", descr: "Select duplicate wind attributes that are specific to Dashboard's Weather template", default: "true"],
-	"percentPrecip":			[title: "Percent precipitation", descr: "Select to display the Chance of Rain, in percent", default: "true"],
-	"precipExtended":			[title: "Extended Precipitation", descr: "Select to display precipitation over a period of +- 2 days", default: "false"],
-	"precip_in":			[title: "Precipitation Inches", descr: "", default: "false"],
-	"precip_mm":			[title: "Precipitation MM", descr: "", default: "false"],
-//	"pressure":				[title: "Pressure", descr: "Select to display the Pressure", default: "true"],
-	"region":				[title: "Region", descr: "", default: "false"],
-//	"temperature":			[title: "Temperature", descr: "Select to display the Temperature", default: "true"],
-	"tempHiLow":			[title: "Temperature high & low day +1", descr: "Select to display tomorrow's Forecast High and Low Temperatures", default: "true"],
-	"twilight_begin":			[title: "Twilight begin", descr: "", default: "false"],
-	"twilight_end":			[title: "Twilight end", descr: "", default: "false"],
-	"tz_id":				[title: "Timezone ID", descr: "", default: "false"],
-//	"uvIndex":				[title: "Ultraviolet Index", descr: "", default: "false"],
-	"vis_km":				[title: "Visibility KM", descr: "", default: "false"],
-	"vis_miles":			[title: "Visibility miles", descr: "", default: "false"],
-	"visual":				[title: "Visual weather", descr: "Select to display the Image of the Weather", default: "true"],
-	"visualDayPlus1":			[title: "Visual weather day +1", descr: "Select to display tomorrow's visual of the Weather", default: "true"],
-	"visualDayPlus1WithText":	[title: "Visual weather day +1 with text", descr: "", default: "false"],
-	"visualWithText":			[title: "Visual weather with text", descr: "", default: "false"],
-	"weather":				[title: "Weather", descr: "Current Conditions", default: "false"],
-	"wind_degree":			[title: "Wind Degree", descr: "Select to display the Wind Direction (number)", default: "false"],
-	"wind_dir":				[title: "Wind direction", descr: "Select to display the Wind Direction (letters)", default: "true"],
-	"wind_kph":				[title: "Wind KPH", descr: "", default: "false"],
-	"wind_mph":				[title: "Wind MPH", descr: "", default: "false"],
-	"wind_mps":				[title: "Wind MPS", descr: "Wind in Meters per Second", default: "false"],
-	"wind_mytile":			[title: "Wind mytile", descr: "", default: "false"],
-	"wind":				[title: "Wind (in default unit)", descr: "Select to display the Wind Speed", default: "true"]
+	"cCF":				[title: "Cloud cover factor", descr: "", typeof: "number", default: "false"],
+	"city":				[title: "City", descr: "Display your City's name?", typeof: "string", default: "true"],
+	"cloud":				[title: "Cloud", descr: "", typeof: "number", default: "false"],
+	"condition_code":			[title: "Condition code", descr: "", typeof: "number", default: "false"],
+	"condition_icon_only":		[title: "Condition icon only", descr: "", typeof: "string", default: "false"],
+	"condition_icon_url":		[title: "Condition icon URL", descr: "", typeof: "string", default: "false"],
+	"condition_icon":			[title: "Condition icon", descr: "", typeof: "string", default: "false"],
+	"condition_text":			[title: "Condition text", descr: "", typeof: "string", default: "false"],
+	"country":				[title: "Country", descr: "", typeof: "string", default: "false"],
+	"dashClock":			[title: "Clock", descr: "Flash time ':' every 2 seconds?", typeof: "string", default: "false"],
+	"feelslike_c":			[title: "Feels like °C", descr: "Select to display the 'feels like' temperature in C:", typeof: "number", default: "true"],
+	"feelslike_f":			[title: "Feels like °F", descr: "Select to display the 'feels like' temperature in F:", typeof: "number", default: "true"],
+	"feelslike":			[title: "Feels like (in default unit)", descr: "Select to display the 'feels like' temperature:", typeof: "number", default: "true"],
+	"forecastIcon":			[title: "Forecast icon", descr: "Select to display an Icon of the Forecast Weather:", typeof: "string", default: "true"],
+	"illuminated":			[title: "Illuminated", descr: "Illuminance with 'lux' added for use on a Dashboard", typeof: "string", default: "true"],
+	"is_day":				[title: "Is daytime", descr: "", typeof: "number", default: "false"],
+	"last_updated_epoch":		[title: "Last updated epoch", descr: "", typeof: "number", default: "false"],
+	"last_updated":			[title: "Last updated", descr: "", typeof: "string", default: "false"],
+	"lat":				[title: "Latitude and Longitude", descr: "Select to display both Latitude and Longitude", typeof: "number", default: "false"],
+	"local_date":			[title: "Local date", descr: "", typeof: "string", default: "false"],
+	"localSunrise":			[title: "Local Sun Rise and Set", descr: "Select to display the Group of 'Time of Local Sunrise and Sunset,' with and without Dashboard text", typeof: "string", default: "true"],
+	"local_time":			[title: "Local time", descr: "", typeof: "string", default: "false"],
+	"localtime_epoch":		[title: "Localtime epoch", descr: "", typeof: "number", default: "false"],
+	"location":				[title: "Location name with region", descr: "", typeof: "string", default: "false"],
+	"mytile":				[title: "Mytile for dashboard", descr: "", typeof: "string", default: "false"],
+	"name":				[title: "Location name", descr: "", typeof: "string", default: "false"],
+	"open_weather":			[title: "OpenWeather attributes", descr: "Select duplicate wind attributes that are specific to Dashboard's Weather template", typeof: false, default: "true"],
+	"percentPrecip":			[title: "Percent precipitation", descr: "Select to display the Chance of Rain, in percent", typeof: "number", default: "true"],
+	"precipExtended":			[title: "Extended Precipitation", descr: "Select to display precipitation over a period of +- 2 days", typeof: false, default: "false"],
+	"precip_in":			[title: "Precipitation Inches", descr: "", typeof: "number", default: "false"],
+	"precip_mm":			[title: "Precipitation MM", descr: "", typeof: "number", default: "false"],
+	"region":				[title: "Region", descr: "", typeof: "string", default: "false"],
+	"tempHiLow":			[title: "Temperature high & low day +1", descr: "Select to display tomorrow's Forecast High and Low Temperatures", typeof: false, default: "true"],
+	"twilight_begin":			[title: "Twilight begin", descr: "", typeof: "string", default: "false"],
+	"twilight_end":			[title: "Twilight end", descr: "", typeof: "string", default: "false"],
+	"tz_id":				[title: "Timezone ID", descr: "", typeof: "string", default: "false"],
+	"vis_km":				[title: "Visibility KM", descr: "", typeof: "number", default: "false"],
+	"vis_miles":			[title: "Visibility miles", descr: "", typeof: "number", default: "false"],
+	"visual":				[title: "Visual weather", descr: "Select to display the Image of the Weather", typeof: "string", default: "true"],
+	"visualDayPlus1":			[title: "Visual weather day +1", descr: "Select to display tomorrow's visual of the Weather", typeof: "string", default: "true"],
+	"visualDayPlus1WithText":	[title: "Visual weather day +1 with text", descr: "", typeof: "string", default: "false"],
+	"visualWithText":			[title: "Visual weather with text", descr: "", typeof: "string", default: "false"],
+	"weather":				[title: "Weather", descr: "Current Conditions", typeof: "string", default: "false"],
+	"wind_degree":			[title: "Wind Degree", descr: "Select to display the Wind Direction (number)", typeof: "number", default: "false"],
+	"wind_dir":				[title: "Wind direction", descr: "Select to display the Wind Direction (letters)", typeof: "string", default: "true"],
+	"wind_kph":				[title: "Wind KPH", descr: "", typeof: "number", default: "false"],
+	"wind_mph":				[title: "Wind MPH", descr: "", typeof: "number", default: "false"],
+	"wind_mps":				[title: "Wind MPS", descr: "Wind in Meters per Second", typeof: "number", default: "false"],
+	"wind_mytile":			[title: "Wind mytile", descr: "", typeof: "string", default: "false"],
+	"wind":				[title: "Wind (in default unit)", descr: "Select to display the Wind Speed", typeof: "number", default: "true"]
 ]
 
 
