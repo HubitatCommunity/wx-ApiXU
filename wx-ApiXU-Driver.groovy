@@ -6,9 +6,12 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.1.8"  }
+public static String version()      {  return "v1.1.9"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.1.9
+ *                Update Attributes for the defined Capabilities (no longer selectable)
  *
  * Version: 1.1.8
  * Version: 1.1.7
@@ -199,6 +202,12 @@ def doPoll(obs) {
 	calcTime(obs)		// calculate all the time variables
 	sendEvent(name: "lastXUupdate", value: now, displayed: true)
 
+	// Update Attributes for the defined Capabilities
+	sendEvent(name: "humidity", value: obs.current.humidity.toFloat(), unit: "%", displayed: true)
+	sendEvent(name: "pressure", value: (isFahrenheit ? obs.current.pressure_in.toFloat() : obs.current.pressure_mb.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MBAR')}", displayed: true)
+	sendEvent(name: "temperature", value: (isFahrenheit ? obs.current.temp_f.toFloat() : obs.current.temp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
+	sendEvent(name: "ultravioletIndex", value: obs.current.uv.toFloat(), displayed: true)
+
 	if (localSunrisePublish) {
 		if (debugOutput) log.debug "localSunrise Group"
 		sendEvent(name: "local_sunrise", value: state.localSunrise, descriptionText: "Sunrise today is at $state.localSunrise", displayed: true)
@@ -237,7 +246,6 @@ def doPoll(obs) {
 	sendEventPublish(name: "country", value: obs.location.country, displayed: true)
 	sendEventPublish(name: "feelsLike", value: (isFahrenheit ? obs.current.feelslike_f : obs.current.feelslike_c), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
 	sendEventPublish(name: "forecastIcon", value: getWUIconName(obs.current.condition.code, obs.current.is_day), displayed: true)
-	sendEventPublish(name: "humidity", value: obs.current.humidity.toFloat(), unit: "%", displayed: true)
 	sendEventPublish(name: "is_day", value: obs.current.is_day, displayed: true)
 	sendEventPublish(name: "last_updated_epoch", value: obs.current.last_updated_epoch, displayed: true)
 	sendEventPublish(name: "last_updated", value: obs.current.last_updated, displayed: true)
@@ -247,13 +255,10 @@ def doPoll(obs) {
 	sendEventPublish(name: "location", value: obs.location.name + ', ' + obs.location.region, displayed: true)
 	sendEventPublish(name: "name", value: obs.location.name, displayed: true)
 	sendEventPublish(name: "percentPrecip", value: (isFahrenheit ? obs.current.precip_in : obs.current.precip_mm), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEventPublish(name: "pressure", value: (isFahrenheit ? obs.current.pressure_in.toFloat() : obs.current.pressure_mb.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MBAR')}", displayed: true)
 	sendEventPublish(name: "region", value: obs.location.region, displayed: true)
-	sendEventPublish(name: "temperature", value: (isFahrenheit ? obs.current.temp_f.toFloat() : obs.current.temp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
 	sendEventPublish(name: "twilight_begin", value: state.twiBegin, descriptionText: "Twilight begins today at $state.twiBegin", displayed: true)
 	sendEventPublish(name: "twilight_end", value: state.twiEnd, descriptionText: "Twilight ends today at $state.twiEnd", displayed: true)	
 	sendEventPublish(name: "tz_id", value: obs.location.tz_id, displayed: true)
-	sendEventPublish(name: "ultravioletIndex", value: obs.current.uv.toFloat(), displayed: true)
 	sendEventPublish(name: "visual", value: '<img src=' + imgName + '>', displayed: true)
 	sendEventPublish(name: "visualDayPlus1", value: '<img src=' + imgNamePlus1 + '>', displayed: true)
 	sendEventPublish(name: "visualDayPlus1WithText", value: '<img src=' + imgNamePlus1 + '><br>' + obs.forecast.forecastday[0].day.condition.text, displayed: true)
@@ -362,7 +367,7 @@ def updateLux()     {
 	if (state?.sunRiseSet?.init) { 
 		if (descTextEnable) log.info "wx-ApiXU lux calc for: $zipCode" // ", $state.loc_lat, $state.localSunset"	
 		def lux = estimateLux(state.condition_code, state.cloud)
-		sendEventPublish(name: "illuminance", value: lux.toFloat(), unit: "lux", displayed: true)
+		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux", displayed: true)
 		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
 	} else {
 		if (descTextEnable) log.info "no wx-ApiXU lux without sunRiseSet value."
@@ -659,8 +664,8 @@ def getImgName(wCode, is_day)       {
 	"feelslike_f":			[title: "Feels like °F", descr: "Select to display the 'feels like' temperature in F:", default: "true"],
 	"feelslike":			[title: "Feels like (in default unit)", descr: "Select to display the 'feels like' temperature:", default: "true"],
 	"forecastIcon":			[title: "Forecast icon", descr: "Select to display an Icon of the Forecast Weather:", default: "true"],
-	"humidity":				[title: "Humidity", descr: "Select to display the Humidity:", default: "true"],
-	"illuminance":			[title: "Illuminance", descr: "Lux value only", default: "true"],
+//	"humidity":				[title: "Humidity", descr: "Select to display the Humidity:", default: "true"],
+//	"illuminance":			[title: "Illuminance", descr: "Lux value only", default: "true"],
 	"illuminated":			[title: "Illuminated", descr: "Illuminance with 'lux' added for use on a Dashboard", default: "true"],
 	"is_day":				[title: "Is daytime", descr: "", default: "false"],
 	"last_updated_epoch":		[title: "Last updated epoch", descr: "", default: "false"],
@@ -678,14 +683,14 @@ def getImgName(wCode, is_day)       {
 	"precipExtended":			[title: "Extended Precipitation", descr: "Select to display precipitation over a period of +- 2 days", default: "false"],
 	"precip_in":			[title: "Precipitation Inches", descr: "", default: "false"],
 	"precip_mm":			[title: "Precipitation MM", descr: "", default: "false"],
-	"pressure":				[title: "Pressure", descr: "Select to display the Pressure", default: "true"],
+//	"pressure":				[title: "Pressure", descr: "Select to display the Pressure", default: "true"],
 	"region":				[title: "Region", descr: "", default: "false"],
-	"temperature":			[title: "Temperature", descr: "Select to display the Temperature", default: "true"],
+//	"temperature":			[title: "Temperature", descr: "Select to display the Temperature", default: "true"],
 	"tempHiLow":			[title: "Temperature high & low day +1", descr: "Select to display tomorrow's Forecast High and Low Temperatures", default: "true"],
 	"twilight_begin":			[title: "Twilight begin", descr: "", default: "false"],
 	"twilight_end":			[title: "Twilight end", descr: "", default: "false"],
 	"tz_id":				[title: "Timezone ID", descr: "", default: "false"],
-	"uvIndex":				[title: "Ultraviolet Index", descr: "", default: "false"],
+//	"uvIndex":				[title: "Ultraviolet Index", descr: "", default: "false"],
 	"vis_km":				[title: "Visibility KM", descr: "", default: "false"],
 	"vis_miles":			[title: "Visibility miles", descr: "", default: "false"],
 	"visual":				[title: "Visual weather", descr: "Select to display the Image of the Weather", default: "true"],
