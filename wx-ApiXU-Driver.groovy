@@ -253,7 +253,7 @@ def doPoll(obs) {
 	sendEventPublish(name: "twilight_begin", value: state.twiBegin, descriptionText: "Twilight begins today at $state.twiBegin", displayed: true)
 	sendEventPublish(name: "twilight_end", value: state.twiEnd, descriptionText: "Twilight ends today at $state.twiEnd", displayed: true)	
 	sendEventPublish(name: "tz_id", value: obs.location.tz_id, displayed: true)
-	sendEventPublish(name: "uvIndex", value: obs.current.uv.toFloat(), displayed: true)
+	sendEventPublish(name: "ultravioletIndex", value: obs.current.uv.toFloat(), displayed: true)
 	sendEventPublish(name: "visual", value: '<img src=' + imgName + '>', displayed: true)
 	sendEventPublish(name: "visualDayPlus1", value: '<img src=' + imgNamePlus1 + '>', displayed: true)
 	sendEventPublish(name: "visualDayPlus1WithText", value: '<img src=' + imgNamePlus1 + '><br>' + obs.forecast.forecastday[0].day.condition.text, displayed: true)
@@ -362,7 +362,7 @@ def updateLux()     {
 	if (state?.sunRiseSet?.init) { 
 		if (descTextEnable) log.info "wx-ApiXU lux calc for: $zipCode" // ", $state.loc_lat, $state.localSunset"	
 		def lux = estimateLux(state.condition_code, state.cloud)
-		sendEventPublish(name: "illuminance", value: lux.toInteger(), unit: "lux", displayed: true)
+		sendEventPublish(name: "illuminance", value: lux.toFloat(), unit: "lux", displayed: true)
 		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
 	} else {
 		if (descTextEnable) log.info "no wx-ApiXU lux without sunRiseSet value."
