@@ -1,6 +1,11 @@
 # ApiXU
 <p>
 <h2> Hubitat Driver to selectively acquire weather and attributes.</h2>
+<p>
+<b>-- ==  Release v1.2  == --</b>
+This release makes a big change in the way the Attributes are presented to the Hub. From Day One, Attributes have been strings. Wind Speed, Precipitation, and Visibility, to name but a few, are all sent from APIXU as numbers. Beginning with v1.2, wx-ApiXU-Driver submits value to the hub in their intended format. Numbers are numbers (Floating point or Integer) and text remains as Strings. Depending on how you’ve been using APIXU this past year, this change has the possibility of breaking your comparisons.<p>
+  <b>Please take great care in upgrading to v1.2 and beyond.</b> Take the time to evaluate your use and to check the results. If you find the results are different, either roll back to v1.1.9 or adjust your automations to account for the new values.<p>
+    <hr>
 <p>This code was Cloned from Bangali's ApiXU Weather Driver (v5.4.1) and involves some cosmetic changes but mostly maintenance (support) improvements.<p>
   Install as Driver Code and then Create a Virtual Device that uses this driver. <br>
   Update with your postal code and Key, click Save Preferences.<p>
