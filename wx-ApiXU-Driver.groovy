@@ -6,16 +6,20 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.2.0"  }
+public static String version()      {  return "v1.2.1"  }
 
 /***********************************************************************************************************************
  *
+ * Version: 1.2.1
+ *                Made repeating updateLux() run slower at night with lowLuxEvery.
+ *                converted Cobra's updateCheck to Async.
+ *
  * Version: 1.2.0 
  *                Update Attributes to send correct type (Number, String) 
- *                 - potential to break user's automation
+ *                 - potential to break user's automation.
  *
  * Version: 1.1.9
- *                Update Attributes for the defined Capabilities (no longer selectable)
+ *                Update Attributes for the defined Capabilities (no longer selectable).
  *
  * Version: 1.1.8
  * Version: 1.1.7
@@ -155,6 +159,7 @@ metadata    {
 		input "isFahrenheit",  "bool", title:"Use Imperial units?", required:true, defaultValue:true
 		input "pollEvery",     "enum", title:"Poll ApiXU how frequently?\nrecommended setting 30 minutes.\nilluminance updating defaults to every 5 minutes.", required:false, defaultValue: 30, options:[5:"5 minutes",10:"10 minutes",15:"15 minutes",30:"30 minutes",60:"1 hour",180:"3 hours"]
 		input "luxEvery",      "enum", title:"Publish illuminance how frequently?", required:false, defaultValue: 5, options:[5:"5 minutes",10:"10 minutes",15:"15 minutes",30:"30 minutes"]
+		input "lowLuxEvery",   "enum", title:"When illuminance is minimum, how frequently is it published?", required:false, defaultValue: 999, options:[999: "don't change", 5:"5 minutes",10:"10 minutes",15:"15 minutes",30:"30 minutes"]
 		input "settingEnable", "bool", title: "<b>Display All Preferences</b>", description: "$settingDescr", defaultValue: true
 		input "debugOutput",   "bool", title: "<b>Enable debug logging?</b>", defaultValue: true
 		input "descTextEnable","bool", title: "<b>Enable descriptionText logging?</b>", defaultValue: true
@@ -195,14 +200,16 @@ def updated()   {
 	if (debugOutput) runIn(1800,logsOff)        // disable debug logs after 30 min
 	if (settingEnable) runIn(2100,SettingsOff)  // "roll up" (hide) the condition selectors after 35 min
 	if (pollEvery == "180") { "runEvery3Hours"(poll) }
-	 else if (pollEvery == "60") { "runEvery1Hour"(poll) }
-	 else { "runEvery${pollEvery}Minutes"(poll) }
-	"runEvery${luxEvery}Minutes"(updateLux)
+	   else if (pollEvery == "60") { "runEvery1Hour"(poll) }
+	   else { "runEvery${pollEvery}Minutes"(poll) }
+//	"runEvery${luxEvery}Minutes"(updateLux)
+	state.luxNext = luxEvery.toInteger() * 60	
+	state.lowLuxRepeat = (lowLuxEvery == '999') ? luxEvery.toInteger() * 60 : lowLuxEvery.toInteger() * 60
 	if (dashClock)  updateClock();
 	poll()
 	if (descTextEnable) log.info "Updated with settings: ${settings}, $state.sunRiseSet"
 	updateCheck()
-	runIn(2, pollSunRiseSet) 
+//	runIn(2, pollSunRiseSet) 
 }
 
 
@@ -379,14 +386,18 @@ def sunRiseSetHandler(resp, data) {
 	Notes: minimum Lux is a value of 5 after dark.
 */
 def updateLux()     {
+	runIn(state.luxNext, updateLux)
 	if (state?.sunRiseSet?.init) { 
 		if (descTextEnable) log.info "wx-ApiXU lux calc for: $zipCode" // ", $state.loc_lat, $state.localSunset"	
 		def lux = estimateLux(state.condition_code, state.cloud)
 		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux", displayed: true)
 		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
+		state.luxNext = (lux > 6) ? luxEvery.toInteger() * 60 : state.lowLuxEvery.toInteger()
+        	//if (debugOutput) log.debug "Lux: $lux, $state.luxNext"
 	} else {
 		if (descTextEnable) log.info "no wx-ApiXU lux without sunRiseSet value."
-		pollSunRiseSet()
+		runIn(2, pollSunRiseSet) 
+		// pollSunRiseSet()
 	}
 }
 
@@ -584,7 +595,7 @@ def forecastPrecip(forecast)	{
 */
 def getWUIconName(condition_code, is_day)     {
    def wIcon = imgCondMap[condition_code].condCode ? imgCondMap[condition_code].condCode[2] : ''
-    if (is_day != 1 && wuIcon)    wuIcon = 'nt_' + wuIcon;
+    if (is_day != 1 && wuIcon) wuIcon = 'nt_' + wuIcon;
     return wuIcon
 }
 
@@ -720,65 +731,64 @@ def getImgName(wCode, is_day)       {
 
 
 
-// Check Version   ***** with great thanks and acknowlegment to Cobra (CobraVmax) for his original code ****
+// Check Version   ***** with great thanks and acknowledgment to Cobra (CobraVmax) for his original code ****
 def updateCheck()
 {    
-	state.Version = version()
 	state.InternalName = "wx-ApiXU-Driver"
 	
 	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU/version.json"]
+	
+ 	asynchttpGet("updateCheckHandler", paramsUD) 
+}
 
-      try {
-            httpGet(paramsUD) { respUD ->
-			//log.warn " Version Checking - Response Data: ${respUD.data}"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
-			state.Copyright = "${thisCopyright}"
-			def newVerRaw = (respUD.data.versions.Driver.(state.InternalName))
-			def newVer = (respUD.data.versions.Driver.(state.InternalName).replaceAll("[.vV]", ""))
-                  def currentVer = state.Version.replaceAll("[.vV]", "")                
-                  state.UpdateInfo = (respUD.data.versions.UpdateInfo.Driver.(state.InternalName))
-                  state.author = (respUD.data.author)
-
-			if(newVer == "NLS")
-			{
-			      state.Status = "<b>** This driver is no longer supported by $state.author  **</b>"       
-			      log.warn "** This driver is no longer supported by $state.author **"      
-			}           
-			else if(currentVer < newVer)
-			{
-			      state.Status = "<b>New Version Available (Version: $newVerRaw)</b>"
-			      log.warn "** There is a newer version of this driver available  (Version: $newVerRaw) **"
-			      log.warn "** $state.UpdateInfo **"
-			} 
-			else if(currentVer > newVer)
-			{
-			      state.Status = "<b>You are using a Test version of this Driver (Version: $newVerRaw)</b>"
-			}
-			else
-			{ 
-			    state.Status = "Current"
-			    if (descTextEnable) log.info "You are using the current version of this driver"
-			}
-            } // httpGet
-      } // try
-
-      catch (e)
-      {
-           log.error "Something went wrong: CHECK THE JSON FILE AND IT'S URI -  $e"
+def updateCheckHandler(resp, data) {
+	if (resp.getStatus() == 200 || resp.getStatus() == 207) {
+		respUD = parseJson(resp.data)
+		//log.warn " Version Checking - Response Data: $respUD"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
+		state.Copyright = "${thisCopyright}"
+		def newVerRaw = (respUD.versions.Driver.(state.InternalName))
+		def newVer = (respUD.versions.Driver.(state.InternalName).replaceAll("[.vV]", ""))
+		def currentVer = version().replaceAll("[.vV]", "")                
+		state.UpdateInfo = (respUD.versions.UpdateInfo.Driver.(state.InternalName))
+		state.author = (respUD.author)
+	
+		if(newVer == "NLS")
+		{
+		      state.Status = "<b>** This driver is no longer supported by $state.author  **</b>"       
+		      log.warn "** This driver is no longer supported by $state.author **"      
+		}           
+		else if(currentVer < newVer)
+		{
+		      state.Status = "<b>New Version Available (Version: $newVerRaw)</b>"
+		      log.warn "** There is a newer version of this driver available  (Version: $newVerRaw) **"
+		      log.warn "** $state.UpdateInfo **"
+		} 
+		else if(currentVer > newVer)
+		{
+		      state.Status = "<b>You are using a Test version of this Driver (Version: $newVerRaw)</b>"
+		}
+		else
+		{ 
+		    state.Status = "Current"
+		    if (descTextEnable) log.info "You are using the current version of this driver"
+		}
+	
+	      if(state.Status == "Current")
+	      {
+	           state.UpdateInfo = "N/A"
+	           sendEvent(name: "DriverUpdate", value: state.UpdateInfo)
+	           sendEvent(name: "DriverStatus", value: state.Status)
+	      }
+	      else 
+	      {
+	           sendEvent(name: "DriverUpdate", value: state.UpdateInfo)
+	           sendEvent(name: "DriverStatus", value: state.Status)
+	      }
       }
-
-      if(state.Status == "Current")
+      else
       {
-           state.UpdateInfo = "N/A"
-           sendEvent(name: "DriverUpdate", value: state.UpdateInfo)
-           sendEvent(name: "DriverStatus", value: state.Status)
+           log.error "Something went wrong: CHECK THE JSON FILE AND IT'S URI"
       }
-      else 
-      {
-           sendEvent(name: "DriverUpdate", value: state.UpdateInfo)
-           sendEvent(name: "DriverStatus", value: state.Status)
-      }
-
- //     sendEvent(name: "DriverVersion", value: state.Version)
 }
 
 def getThisCopyright(){"&copy; 2019 C Steele "}

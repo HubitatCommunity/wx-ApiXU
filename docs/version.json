@@ -1,19 +1,19 @@
 {
-        "Comment": "Last updated: 06/24/2019", 
+        "Comment": "Last updated: 06/30/2019", 
         "copyright": " &#9400; 2019 csteele",
         "author": "C Steele",
         "versions": {
                 "Application": {
                 },
                 "Driver": {
-                        "wx-ApiXU-Driver": "v1.2.0"
+                        "wx-ApiXU-Driver": "v1.2.1"
                 },
 
                 "UpdateInfo": {
                         "Application": {
                         },
                         "Driver": {
-                        "wx-ApiXU-Driver": "Updated 06/24/2019"
+                        "wx-ApiXU-Driver": "Updated 06/30/2019"
                         }
                 }
         }
