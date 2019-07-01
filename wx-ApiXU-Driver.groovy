@@ -392,7 +392,7 @@ def updateLux()     {
 		def lux = estimateLux(state.condition_code, state.cloud)
 		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux", displayed: true)
 		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
-		state.luxNext = (lux > 6) ? state.luxNext.toInteger() * 60 : state.lowLuxRepeat.toInteger()
+		state.luxNext = (lux > 6) ? state.luxNext.toInteger() : state.lowLuxRepeat.toInteger()
         	//if (debugOutput) log.debug "Lux: $lux, $state.luxNext"
 	} else {
 		if (descTextEnable) log.info "no wx-ApiXU lux without sunRiseSet value."
