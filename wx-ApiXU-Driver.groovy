@@ -403,13 +403,14 @@ def updateLux()     {
 
 
 def estimateLux(condition_code, cloud)     {	
-	def lT              = new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX", state.tZ)
-	def localTime       = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", lT, state.tZ)
-	def sunriseTime     = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunrise, state.tZ)
-	def sunsetTime      = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunset, state.tZ)
- 	def noonTime        = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.solar_noon, state.tZ)
-	def twilight_begin  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_begin, state.tZ)
-	def twilight_end    = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_end, state.tZ)
+	def tZ              = TimeZone.getTimeZone(state.tz_id)
+	def lT              = new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX", tZ)
+	def localTime       = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", lT, tZ)
+	def sunriseTime     = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunrise, tZ)
+	def sunsetTime      = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunset, tZ)
+	def noonTime        = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.solar_noon, tZ)
+	def twilight_begin  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_begin, tZ)
+	def twilight_end    = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_end, tZ)
 
 	def lux = 0l
 	def aFCC = true
@@ -479,7 +480,6 @@ def calcTime(wxData) {
 	// to that method. Lat + long needs to be saved.
 	state.loc_lat   = wxData.location.lat ?: location.latitude
 	state.loc_lon   = wxData.location.lon ?: location.longitude
-	state.tZ        = TimeZone.getTimeZone(wxData.location.tz_id)
 	state.tz_id     = wxData.location.tz_id
 	state.thisDate  = Date.parse("yyyy-MM-dd HH:mm", wxData.location.localtime).format("yyyy-MM-dd")
 	state.thisTime  = Date.parse("yyyy-MM-dd HH:mm", wxData.location.localtime).format("HH:mm")
