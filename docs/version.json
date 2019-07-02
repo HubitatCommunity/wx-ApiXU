@@ -1,5 +1,5 @@
 {
-        "Comment": "Last updated: 06/30/2019", 
+        "Comment": "Last updated: 07/02/2019", 
         "copyright": " &#9400; 2019 csteele",
         "author": "C Steele",
         "versions": {
@@ -7,6 +7,7 @@
                 },
                 "Driver": {
                         "wx-ApiXU-Driver": "v1.2.1"
+                        "Luxuriant-Driver": "v0.1"
                 },
 
                 "UpdateInfo": {
@@ -14,6 +15,7 @@
                         },
                         "Driver": {
                         "wx-ApiXU-Driver": "Updated 06/30/2019"
+                        "Luxuriant-Driver": "Updated 07/02/2019"
                         }
                 }
         }
