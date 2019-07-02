@@ -39,6 +39,8 @@ metadata
  		capability "Illuminance Measurement"
  		capability "Polling"
  		capability "Sensor"
+
+		command "updateCheck"			// **---** delete for Release
 	}
 
       preferences 
@@ -254,7 +256,7 @@ def updateCheck()
 	state.Version = version()
 	state.InternalName = "Luxuriant-Driver"
 	
-	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU-Driver/version.json"]
+	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU/version.json"]
 	
  	asynchttpGet("updateCheckHandler", paramsUD) 
 }
@@ -262,7 +264,7 @@ def updateCheck()
 def updateCheckHandler(resp, data) {
 	if (resp.getStatus() == 200 || resp.getStatus() == 207) {
 		respUD = parseJson(resp.data)
-		//log.warn " Version Checking - Response Data: $respUD"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
+		// log.warn " Version Checking - Response Data: $respUD"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
 		state.Copyright = "${thisCopyright}"
 		def newVerRaw = (respUD.versions.Driver.(state.InternalName))
 		def newVer = (respUD.versions.Driver.(state.InternalName).replaceAll("[.vV]", ""))
