@@ -1,4 +1,6 @@
 /*
+ * Import URL: https://raw.githubusercontent.com/HubitatCommunity/wx-ApiXU/master/Luxuriant-Driver.groovy
+ *
  *	Copyright 2019 C Steele
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -19,7 +21,7 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v0.1"  }
+ public static String version()      {  return "v0.2"  }
 
 /***********************************************************************************************************************
  *
