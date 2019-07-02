@@ -40,7 +40,7 @@ metadata
  		capability "Polling"
  		capability "Sensor"
 
-		command "updateCheck"			// **---** delete for Release
+	//	command "updateCheck"			// **---** delete for Release
 	}
 
       preferences 
