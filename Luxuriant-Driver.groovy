@@ -21,7 +21,7 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v0.2"  }
+ public static String version()      {  return "v1.2"  }
 
 /***********************************************************************************************************************
  *
@@ -33,7 +33,7 @@ import groovy.transform.Field
 
 metadata 
 {
-	definition(name: "Luxuriant-Driver", namespace: "csteele", author: "C Steele")
+	definition(name: "Luxuriant-Driver", namespace: "csteele", author: "C Steele", importUrl: "https://raw.githubusercontent.com/HubitatCommunity/wx-ApiXU/master/Luxuriant-Driver.groovy")
 	{
  		capability "Illuminance Measurement"
  		capability "Polling"
