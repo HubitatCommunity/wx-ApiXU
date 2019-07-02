@@ -22,12 +22,21 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v1.2"  }
+ public static String version()      {  return "v1.4"  }
 
 /***********************************************************************************************************************
  *
- * Version: 0.1
- *                Initial Publish
+ * Version: 1.4
+ *                Added attribute illuminated for Dashboard.
+ *
+ * Version: 1.3
+ *                Added auto off on Debug logs
+ *
+ * Version: 1.2
+ *                correction to updateCheck url.
+ * 
+ * Version: 1.1
+ *                Initial Publish.
 */
  
 import groovy.transform.Field
@@ -40,6 +49,7 @@ metadata
  		capability "Polling"
  		capability "Sensor"
 
+		attribute "illuminated",   "string"
 	//	command "updateCheck"			// **---** delete for Release
 	}
 
@@ -71,6 +81,7 @@ def updated()
 	state.tz_id = TimeZone.getDefault().getID()
 	state.luxNext = luxEvery.toInteger() * 60	
 	state.lowLuxRepeat = (lowLuxEvery == '999') ? luxEvery.toInteger() * 60 : lowLuxEvery.toInteger() * 60
+	if (debugOutput) runIn(1800,logsOff)        // disable debug logs after 30 min
 	if (descTextEnable) log.info "Updated with settings: ${settings}, $state.tz_id, $state.sunRiseSet"
 	pollSunRiseSet
 	runIn(4, updateLux) // give sunrise/set time to complete.
@@ -214,38 +225,9 @@ def initialize()
 }
 
 
-/*
-	parse
-    
-	In a virtual world this should never be called.
-*/
-def parse(String description)
-{
-	log.trace "Msg: Description is $description"
-}
-
-/*
-	on
-    
-	Turns the device on.
-*/
-def on()
-{
-	// The server will update on/off status
-	log.trace "Msg: $description ON"
-	
-}
-
-
-/*
-	off
-    
-	Turns the device off.
-*/
-def off()
-{
-	// The server will update on/off status
-	log.trace "Msg: $description OFF"
+def logsOff(){
+	log.warn "debug logging disabled..."
+	device.updateSetting("debugOutput",[value:"false",type:"bool"])
 }
 
 
