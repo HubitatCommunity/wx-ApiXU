@@ -17,6 +17,7 @@
  *
  *
  *  attribution: sunrise and sunset courtesy: https://sunrise-sunset.org/
+ *             : lux calc courtesy of Bengali
  *
  *  for use with HUBITAT, so no tiles
  */
