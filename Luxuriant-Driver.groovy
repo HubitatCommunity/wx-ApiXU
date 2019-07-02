@@ -61,6 +61,7 @@ def poll()	{ updateLux() }
 def updated()
 {
 	initialize()
+	schedule("23 10 0 ? * * *", pollSunRiseSet)
 	schedule("0 0 8 ? * FRI *", updateCheck)
 	state.tz_id = TimeZone.getDefault().getID()
 	state.luxNext = luxEvery.toInteger() * 60	
@@ -150,7 +151,6 @@ def estimateLux(condition_code, cloud)     {
 */
 def pollSunRiseSet() {
 	if (true) {
-//		def requestParams = [ uri: "https://api.sunrise-sunset.org/json?lat=$state.loc_lat&lng=$state.loc_lon&formatted=0" ]
 		def requestParams = [ uri: "https://api.sunrise-sunset.org/json?lat=$location.latitude&lng=$location.longitude&formatted=0" ]
 		if (descTextEnable) log.info "SunRiseSet poll for $location.latitude  $location.longitude : $requestParams"
 		asynchttpGet("sunRiseSetHandler", requestParams)
