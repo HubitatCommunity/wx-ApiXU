@@ -6,9 +6,14 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.2.1"  }
+public static String version()      {  return "v1.3.0"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.3.0
+ *                Added attribute betwixt for Dashboard.
+ *                Rewrote Lux calculation using Milliseconds vs Date Object
+ *                 to be half the number of conversions.
  *
  * Version: 1.2.1
  *                Made repeating updateLux() run slower at night with lowLuxEvery.
@@ -143,6 +148,8 @@ metadata    {
 
 		attribute "temperatureHighDayPlus1", "number"  // tempHiLowPublish related
 		attribute "temperatureLowDayPlus1",  "number"  // tempHiLowPublish   |
+
+		attribute "betwixt",       "string"
 	
 		command "refresh"
 //		command "WipeState"			// **---** delete for Release
@@ -193,23 +200,23 @@ def refresh()	{ poll() }
 
 */
 def updated()   {
-	unschedule()
+	initialize()  // includes an unsubscribe()
 	schedule("23 10 0 ? * * *", pollSunRiseSet)
 	schedule("0 0 8 ? * FRI *", updateCheck)
+	state.tz_id = TimeZone.getDefault().getID()
 	state.clockSeconds = true
 	if (debugOutput) runIn(1800,logsOff)        // disable debug logs after 30 min
 	if (settingEnable) runIn(2100,SettingsOff)  // "roll up" (hide) the condition selectors after 35 min
 	if (pollEvery == "180") { "runEvery3Hours"(poll) }
 	   else if (pollEvery == "60") { "runEvery1Hour"(poll) }
 	   else { "runEvery${pollEvery}Minutes"(poll) }
-//	"runEvery${luxEvery}Minutes"(updateLux)
 	state.luxNext = luxEvery.toInteger() * 60	
 	state.lowLuxRepeat = (lowLuxEvery == '999') ? luxEvery.toInteger() * 60 : lowLuxEvery.toInteger() * 60
 	if (dashClock)  updateClock();
 	poll()
 	if (descTextEnable) log.info "Updated with settings: ${settings}, $state.sunRiseSet"
-	updateCheck()
-//	runIn(2, pollSunRiseSet) 
+	runIn(4, updateLux)      // give sunrise/set time to complete.
+	runIn(20, updateCheck)  // verify version once
 }
 
 
@@ -307,7 +314,6 @@ def doPoll(obs) {
 
 	sendEventPublish(name: "mytile", value: mytext, displayed: true)
 
-	updateLux()
 	forecastPrecip(obs.forecast)
 
 	return
@@ -358,6 +364,7 @@ def pollSunRiseSet() {
 		if (descTextEnable) log.info "SunRiseSet poll for $state.loc_lat  $state.loc_lon" //$requestParams"
 		asynchttpGet("sunRiseSetHandler", requestParams)
 	} else {
+		state.sunRiseSet.init = false
 		log.error "wx-ApiXU no sunrise-sunset without Lat/Long."
 	}
 }
@@ -389,9 +396,10 @@ def updateLux()     {
 	runIn(state.luxNext, updateLux)
 	if (state?.sunRiseSet?.init) { 
 		if (descTextEnable) log.info "wx-ApiXU lux calc for: $zipCode" // ", $state.loc_lat, $state.localSunset"	
-		def lux = estimateLux(state.condition_code, state.cloud)
+		def (lux, bwn) = estimateLux(state.condition_code, state.cloud)
 		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux", displayed: true)
 		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
+		sendEventPublish(name: "betwixt", value: bwn, displayed: true)
 		state.luxNext = (lux > 6) ? state.luxNext.toInteger() : state.lowLuxRepeat.toInteger()
         	//if (debugOutput) log.debug "Lux: $lux, $state.luxNext"
 	} else {
@@ -403,67 +411,75 @@ def updateLux()     {
 
 
 def estimateLux(condition_code, cloud)     {	
-	def tZ              = TimeZone.getTimeZone(state.tz_id)
-	def lT              = new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX", tZ)
-	def localTime       = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", lT, tZ)
-	def sunriseTime     = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunrise, tZ)
-	def sunsetTime      = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunset, tZ)
-	def noonTime        = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.solar_noon, tZ)
-	def twilight_begin  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_begin, tZ)
-	def twilight_end    = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_end, tZ)
-
 	def lux = 0l
 	def aFCC = true
 	def l
+	def bwn
 
-	if (timeOfDayIsBetween(sunriseTime, noonTime, localTime))      {
-		if (debugOutput) log.debug "between sunrise and noon"
-		l = (((localTime.getTime() - sunriseTime.getTime()) * 10000f) / (noonTime.getTime() - sunriseTime.getTime()))
-		lux = (l < 50f ? 50l : l.trunc(0) as long)
-	}
-	else if (timeOfDayIsBetween(noonTime, sunsetTime, localTime))      {
-		if (debugOutput) log.debug "between noon and sunset"
-		l = (((sunsetTime.getTime() - localTime.getTime()) * 10000f) / (sunsetTime.getTime() - noonTime.getTime()))
-		lux = (l < 50f ? 50l : l.trunc(0) as long)
-	}
-	else if (timeOfDayIsBetween(twilight_begin, sunriseTime, localTime))      {
-		if (debugOutput) log.debug "between sunrise and twilight"
-		l = (((localTime.getTime() - twilight_begin.getTime()) * 50f) / (sunriseTime.getTime() - twilight_begin.getTime()))
+	def tZ                   = TimeZone.getTimeZone(state.tz_id)
+	def lT                   = new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX", tZ)
+	def localeMillis         = getEpoch(lT)
+	def sunriseTimeMillis    = getEpoch(state.sunRiseSet.sunrise)
+	def sunsetTimeMillis     = getEpoch(state.sunRiseSet.sunset)
+	def noonTimeMillis       = getEpoch(state.sunRiseSet.solar_noon)
+	def twilight_beginMillis = getEpoch(state.sunRiseSet.civil_twilight_begin)
+	def twilight_endMillis   = getEpoch(state.sunRiseSet.civil_twilight_end)
+	// log.debug "millis: $lT, $localeMillis, $twilight_beginMillis, $sunriseTimeMillis, $noonTimeMillis, $sunsetTimeMillis, $twilight_endMillis"
+
+	if (   localeMillis > twilight_beginMillis   && localeMillis < sunriseTimeMillis)  {
+		bwn = "between sunrise and twilight" 
+		l = (((localeMillis - twilight_beginMillis) * 50f) / (sunriseTimeMillis - twilight_beginMillis))
 		lux = (l < 10f ? 10l : l.trunc(0) as long)
 	}
-	else if (timeOfDayIsBetween(sunsetTime, twilight_end, localTime))      {
-		if (debugOutput) log.debug "between sunset and twilight"
-		l = (((twilight_end.getTime() - localTime.getTime()) * 50f) / (twilight_end.getTime() - sunsetTime.getTime()))
+	else if (localeMillis > sunriseTimeMillis    && localeMillis < noonTimeMillis )    { 
+		bwn = "between sunrise and noon" 
+		l = (((localeMillis - sunriseTimeMillis) * 10000f) / (noonTimeMillis - sunriseTimeMillis))
+		lux = (l < 50f ? 50l : l.trunc(0) as long)
+	}
+	else if (localeMillis > noonTimeMillis       && localeMillis < sunsetTimeMillis)   {
+		bwn = "between noon and sunset" 
+		l = (((sunsetTimeMillis - localeMillis) * 10000f) / (sunsetTimeMillis - noonTimeMillis))
+		lux = (l < 50f ? 50l : l.trunc(0) as long)
+	}
+	else if (localeMillis > sunsetTimeMillis     && localeMillis < twilight_endMillis) {
+		bwn = "between sunset and twilight" 
+		l = (((twilight_endMillis - localeMillis) * 50f) / (twilight_endMillis - sunsetTimeMillis))
 		lux = (l < 10f ? 10l : l.trunc(0) as long)
 	}
-	else if (!timeOfDayIsBetween(twilight_begin, twilight_end, localTime))      {
-		if (debugOutput) log.debug "between non-twilight"
+	else {
+		bwn = "Fully Night Time" 
 		lux = 5l
 		aFCC = false
 	}
-	
+
 	def cC = condition_code.toInteger()
-	def cCT = ''
+//	def cCT = ''
 	def cCF
 	if (aFCC)
-	    if (imgCondMap[cC].condCode)    {
-	        cCF = imgCondMap[cC].condCode[1]
-	        cCT = imgCondMap[cC].condCode[0]
+	    if (imgCondMap[cC].condCode)
+	    {
+	      cCF = imgCondMap[cC].condCode[1]
+//	      cCT = imgCondMap[cC].condCode[0]
 	    }
-	    else    {
-	        cCF = ((100 - (cloud.toInteger() / 3d)) / 100).round(1)
-	        cCT = 'using cloud cover'
+	    else
+	    {
+		// factor in cloud cover if available
+		cCF = state.apixu.init ? ((100 - (cloud.toInteger() / 3d)) / 100) : 0.998d
+   		// log.debug "zzz: $l $cloud $cCF, $lux, $bwn, $state.apixu.init"
+//	      cCT = 'using cloud cover'
 	    }
-	else    {
+	else
+	{
 	    cCF = 1.0
-	    cCT = 'night time now'
+//	    cCT = 'night time now'
 	}
 	
 	lux = (lux * cCF) as long
-	if (debugOutput) log.debug "condition: $cC | condition text: $cCT | condition factor: $cCF | lux: $lux"
+//	if (debugOutput) log.debug "condition: $cC | condition text: $cCT | condition factor: $cCF | lux: $lux"
+	if (debugOutput) log.debug "condition: $cC | condition factor: $cCF | lux: $lux"
 	sendEventPublish(name: "cCF", value: cCF, displayed: true)
 	
-	return lux
+	return [lux, bwn]
 }
 
 
@@ -480,7 +496,7 @@ def calcTime(wxData) {
 	// to that method. Lat + long needs to be saved.
 	state.loc_lat   = wxData.location.lat ?: location.latitude
 	state.loc_lon   = wxData.location.lon ?: location.longitude
-	state.tz_id     = wxData.location.tz_id
+	state.tz_id     = wxData.location.tz_id ?: TimeZone.getDefault().getID()
 	state.thisDate  = Date.parse("yyyy-MM-dd HH:mm", wxData.location.localtime).format("yyyy-MM-dd")
 	state.thisTime  = Date.parse("yyyy-MM-dd HH:mm", wxData.location.localtime).format("HH:mm")
 	// if (debugOutput) log.debug "calcTime: $state" // ".sunRiseSet"
@@ -497,12 +513,6 @@ def calcTime(wxData) {
 	mytext += '<br>' + wxData.current.condition.text
 	//if (debugOutput) log.debug "mytext: $mytext"
 }
-
-
-def timeOfDayIsBetween(fromDate, toDate, checkDate)     {
-	return (!checkDate.before(fromDate) && !checkDate.after(toDate))
-}
-
 
 
 def logsOff(){
@@ -533,6 +543,21 @@ def sendEventPublish(evt)	{
 
 
 /*
+	getEpoch
+
+	Purpose: take a Date object and return Milliseconds (Epoch)
+
+	Notes:
+*/
+def getEpoch (aTime) {
+	def tZZ = TimeZone.getTimeZone(state.tz_id)
+	def localeTime = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", aTime, tZZ)
+	long localeMillis = localeTime.getTime()
+	return (localeMillis)
+}
+
+
+/*
 	updateClock
 
 	Purpose: implements a blinking : in a dashboard clock
@@ -551,11 +576,6 @@ def updateClock()       {
 	state.clockSeconds = (state.clockSeconds ? false : true)
 }
 
-def installed() {
-	if (descTextEnable) log.info "$InternalName is Installed"
-	state.driverInstalled = true
-}
-
 
 def forecastPrecip(forecast)	{
 	if (state?.forecastPrecip?.init == null) {
@@ -569,7 +589,7 @@ def forecastPrecip(forecast)	{
     	    	init:            true
     	   ]
 	}
-	if (state.thisDate == state.forecastPrecip.date || state?.sunRiseSet == null || !precipExtendedPublish) { if (descTextEnable) log.info "skip wx-ApiXU forecast precip"; return }
+	if (state.thisDate == state.forecastPrecip.date || state?.sunRiseSet == null || !precipExtendedPublish) { if (descTextEnable) log.info "skip wx-ApiXU forecast precip this cycle"; return }
 
 	state.forecastPrecip.date = state.thisDate
 	state.forecastPrecip.precipDayMinus2 = state.forecastPrecip.precipDayMinus1
@@ -679,6 +699,7 @@ def getImgName(wCode, is_day)       {
 
 
 @Field static attributesMap = [
+	"betwixt":				[title: "Betwixt", descr: "Display the 'slice-of-day'?", typeof: "string", default: "false"],
 	"cCF":				[title: "Cloud cover factor", descr: "", typeof: "number", default: "false"],
 	"city":				[title: "City", descr: "Display your City's name?", typeof: "string", default: "true"],
 	"cloud":				[title: "Cloud", descr: "", typeof: "number", default: "false"],
@@ -731,19 +752,57 @@ def getImgName(wCode, is_day)       {
 	"wind":				[title: "Wind (in default unit)", descr: "Select to display the Wind Speed", typeof: "number", default: "true"]
 ]
 
+/*
+
+	generic driver stuff
+
+*/
+
+
+/*
+	installed
+    
+	Doesn't do much other than call initialize().
+*/
+def installed()
+{
+	if (descTextEnable) log.info "$InternalName is Installed"
+	state.driverInstalled = true
+	initialize()
+}
+
+
+
+
+
+/*
+	initialize
+    
+*/
+def initialize()
+{
+	unschedule()
+	if (state?.sunRiseSet?.init == null) state.sunRiseSet = [init:false]
+	if (state?.apixu?.init      == null) state.apixu      = [init:false]
+	state.luxNext = 30
+	log.trace "$InternalName was initialized"
+}
+
+
 
 
 // Check Version   ***** with great thanks and acknowledgment to Cobra (CobraVmax) for his original code ****
 def updateCheck()
 {    
-	state.InternalName = "wx-ApiXU-Driver"
-	
 	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU/version.json"]
 	
  	asynchttpGet("updateCheckHandler", paramsUD) 
 }
 
 def updateCheckHandler(resp, data) {
+
+	state.InternalName = "wx-ApiXU-Driver"
+	
 	if (resp.getStatus() == 200 || resp.getStatus() == 207) {
 		respUD = parseJson(resp.data)
 		//log.warn " Version Checking - Response Data: $respUD"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
