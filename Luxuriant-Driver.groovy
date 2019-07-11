@@ -22,9 +22,12 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v1.5"  }
+ public static String version()      {  return "v1.5.1"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.5.1
+ *                Corrected typos on twilight (astro vs civil).
  *
  * Version: 1.5
  *                Added ApiXU call to get cloud data.
@@ -201,8 +204,8 @@ def sunRiseSetHandler(resp, data) {
 		//if (debugOutput) log.debug "sunRiseSet: $state.sunRiseSet"
 		state.localSunrise = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunrise).format("HH:mm")
 		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunset).format("HH:mm")
-		state.twiBegin = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.astronomical_twilight_begin).format("HH:mm")
-		state.twiEnd   = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.astronomical_twilight_end).format("HH:mm")
+		state.twiBegin = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_begin).format("HH:mm")
+		state.twiEnd   = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_end).format("HH:mm")
 	} else { log.error "Sunrise-sunset api did not return data: $resp" }
 }
 
