@@ -164,8 +164,8 @@ metadata    {
 	
 		command "refresh"
 //		command "WipeState"			// **---** delete for Release
-		command "updateLux"			// **---** delete for Release
-		command "pollSunRiseSet"		// **---** delete for Release
+//		command "updateLux"			// **---** delete for Release
+//		command "pollSunRiseSet"		// **---** delete for Release
 //		command "updateCheck"			// **---** delete for Release
  	}
 
