@@ -22,9 +22,15 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v1.5.1"  }
+ public static String version()      {  return "v1.5.2"  }
 
 /***********************************************************************************************************************
+ *
+ *
+ * Version: 1.5.2
+ *                Moved the subscribe statements to initialize().
+ *                Reworked updateLux() to use a schedule() vs chained runIn for robustness.
+ *                Moved sunRiseSet map from 'state' to 'data' storage.
  *
  * Version: 1.5.1
  *                Corrected typos on twilight (astro vs civil).
@@ -89,18 +95,12 @@ def poll()	{ updateLux() }
 def updated()
 {
 	initialize()
-	schedule("23 10 0 ? * * *", pollSunRiseSet)
-	schedule("0 0 8 ? * FRI *", updateCheck)
-	state.tz_id = TimeZone.getDefault().getID()
-	state.luxNext = luxEvery.toInteger() * 60	
-	state.lowLuxRepeat = (lowLuxEvery == '999') ? luxEvery.toInteger() * 60 : lowLuxEvery.toInteger() * 60
 	if (debugOutput) runIn(1800,logsOff)        // disable debug logs after 30 min
 	if (descTextEnable) log.info "Updated with settings: ${settings}, $state.tz_id, $state.sunRiseSet"
 	pollSunRiseSet
 	pollEvery = luxEvery
 	"runEvery${pollEvery}Minutes"(pollApixu) 
-	runIn(4, updateLux) // give sunrise/set time to complete.
-	runIn(20, updateCheck) 
+	state.remove("sunRiseSet")
 }
 
 
@@ -112,15 +112,16 @@ def updated()
 	Notes: minimum Lux is a value of 5 after dark.
 */
 def updateLux()     {
-	runIn(state.luxNext, updateLux)
 	if (state?.sunRiseSet?.init) { 
 		if (descTextEnable) log.info "Luxurient lux calc for: $location.latitude  $location.longitude"	
 		def (lux, bwn) = estimateLux(state.condition_code, state.cloud)
-		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux", displayed: true)
-		sendEvent(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
-		sendEvent(name: "betwixt",     value: bwn, displayed: true)
-		state.luxNext = (lux > 6) ? state.luxNext.toInteger() : state.lowLuxRepeat.toInteger()
-        	if (debugOutput) log.debug "Lux: $lux, $state.luxNext, $betwixt"
+		state.luxNext = (lux > 6) ? true : false 
+		state.luxNext ? { schedule("0 0/${luxEvery} * * * ?", updateLux) } : {if (lowLuxEvery != 999) { schedule("0 0/${lowLuxEvery} * * * ?", updateLux) } }
+
+		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux")
+		sendEvent(name: "illuminated", value: String.format("%,d lux", lux))
+		sendEvent(name: "betwixt",     value: bwn)
+        	if (debugOutput) log.debug "Lux: $lux, $state.luxNext, $bwn"
 	} else {
 		if (descTextEnable) log.info "no Luxurient lux without sunRiseSet value."
 		pollSunRiseSet()
@@ -134,18 +135,19 @@ def estimateLux(condition_code, cloud)     {
 	def l
 	def bwn
 
+	def sunRiseSet           = parseJson(getDataValue("sunRiseSet")).results
 	def tZ                   = TimeZone.getTimeZone(state.tz_id)
 	def lT                   = new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX", tZ)
 	def localeMillis         = getEpoch(lT)
-	def sunriseTimeMillis    = getEpoch(state.sunRiseSet.sunrise)
-	def sunsetTimeMillis     = getEpoch(state.sunRiseSet.sunset)
-	def noonTimeMillis       = getEpoch(state.sunRiseSet.solar_noon)
-	def twilight_beginMillis = getEpoch(state.sunRiseSet.civil_twilight_begin)
-	def twilight_endMillis   = getEpoch(state.sunRiseSet.civil_twilight_end)
-	// log.debug "millis: $lT, $localeMillis, $twilight_beginMillis, $sunriseTimeMillis, $noonTimeMillis, $sunsetTimeMillis, $twilight_endMillis"
+	def sunriseTimeMillis    = getEpoch(sunRiseSet.sunrise)
+	def sunsetTimeMillis     = getEpoch(sunRiseSet.sunset)
+	def noonTimeMillis       = getEpoch(sunRiseSet.solar_noon)
+	def twilight_beginMillis = getEpoch(sunRiseSet.civil_twilight_begin)
+	def twilight_endMillis   = getEpoch(sunRiseSet.civil_twilight_end)
+	// log.debug "EpochMillis: now: $lT -> localMillis: $localeMillis, $sunRiseSet.civil_twilight_begin -> $twilight_beginMillis, Rise: $sunriseTimeMillis, Noon: $sunRiseSet.solar_noon -> $noonTimeMillis, Set: $sunsetTimeMillis, $sunRiseSet.civil_twilight_end -> $twilight_endMillis"
 
 	if (   localeMillis > twilight_beginMillis   && localeMillis < sunriseTimeMillis)  {
-		bwn = "between sunrise and twilight" 
+		bwn = "between twilight and sunrise" 
 		l = (((localeMillis - twilight_beginMillis) * 50f) / (sunriseTimeMillis - twilight_beginMillis))
 		lux = (l < 10f ? 10l : l.trunc(0) as long)
 	}
@@ -199,13 +201,14 @@ def pollSunRiseSet() {
 
 def sunRiseSetHandler(resp, data) {
 	if(resp.getStatus() == 200 || resp.getStatus() == 207) {
-		state.sunRiseSet = resp.getJson().results
+		sunRiseSet = resp.getJson().results
+        	updateDataValue("sunRiseSet", resp.getData())
 		state.sunRiseSet.init = true
 		//if (debugOutput) log.debug "sunRiseSet: $state.sunRiseSet"
-		state.localSunrise = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunrise).format("HH:mm")
-		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunset).format("HH:mm")
-		state.twiBegin = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_begin).format("HH:mm")
-		state.twiEnd   = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_end).format("HH:mm")
+		state.localSunrise = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.sunrise).format("HH:mm")
+		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.sunset).format("HH:mm")
+		state.twiBegin     = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.civil_twilight_begin).format("HH:mm")
+		state.twiEnd       = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.civil_twilight_end).format("HH:mm")
 	} else { log.error "Sunrise-sunset api did not return data: $resp" }
 }
 
@@ -221,9 +224,9 @@ def pollApixu() {
 	state.apixu.init = false
 	if (apixuKey) {
 		def requestParams = [ uri: "https://api.apixu.com/v1/current.json?key=$apixuKey&q=$location.latitude,$location.longitude&days=3" ]
-		if (descTextEnable) log.info "ApiXU poll for Cloud Data " //: $requestParams"
+		if (descTextEnable) log.info "Luxuriant-ApiXU poll for Cloud Data " //: $requestParams"
 		asynchttpGet("apixuHandler", requestParams)
-	} else { if (descTextEnable) log.info "ApiXU poll is missing the Key" }
+	} else { if (descTextEnable) log.info "Luxuriant-ApiXU no Key - no offset of Lux by cloud cover." }
 }
 
 /*
@@ -236,11 +239,11 @@ def pollApixu() {
 def apixuHandler(resp, data) {
 	if(resp.getStatus() == 200 || resp.getStatus() == 207) {
 		obs = parseJson(resp.data)
-        	if (debugOutput) log.debug "ApiXU returned: $obs"
+        	if (debugOutput) log.debug "Luxuriant-ApiXU returned: $obs"
 		state.apixu.init = true
 		state.cloud = obs.current.cloud
 	} else {
-		log.error "ApiXU weather api did not return data: $resp"
+		log.error "Luxuriant-ApiXU weather api did not return data: $resp"
 		state.apixu.init = false
 	}
 }
@@ -287,9 +290,14 @@ def installed()
 def initialize()
 {
 	unschedule()
+	schedule("23 10 0 ? * * *", pollSunRiseSet)
+	schedule("0 0 8 ? * FRI *", updateCheck)
+	schedule("0 0/${luxEvery} * * * ?", updateLux)
+	state.tz_id = TimeZone.getDefault().getID()
 	if (state?.sunRiseSet?.init == null) state.sunRiseSet = [init:false]
 	if (state?.apixu?.init      == null) state.apixu      = [init:false]
-	state.luxNext = 30
+	runIn(4, updateLux) // give sunrise/set time to complete.
+	runIn(20, updateCheck) 
 	log.trace "Msg: initialize ran"
 }
 
@@ -342,7 +350,7 @@ def updateCheckHandler(resp, data) {
 		} 
 		else if(currentVer > newVer)
 		{
-		      state.Status = "<b>You are using a Test version of this Driver (Version: $newVerRaw)</b>"
+		      state.Status = "<b>You are using a Test version of this Driver (Expecting: $newVerRaw)</b>"
 		}
 		else
 		{ 

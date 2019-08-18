@@ -6,16 +6,16 @@
                 "Application": {
                 },
                 "Driver": {
-                        "wx-ApiXU-Driver": "v1.3.1",
-                        "Luxuriant-Driver": "v1.5.1"
+                        "wx-ApiXU-Driver": "v1.4.0",
+                        "Luxuriant-Driver": "v1.5.2"
                 },
 
                 "UpdateInfo": {
                         "Application": {
                         },
                         "Driver": {
-                        "wx-ApiXU-Driver": "Updated 07/10/2019",
-                        "Luxuriant-Driver": "Updated 07/10/2019"
+                        "wx-ApiXU-Driver": "Updated 17/8/2019",
+                        "Luxuriant-Driver": "Updated 17/8/2019"
                         }
                 }
         }
