@@ -6,9 +6,17 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.3.1"  }
+public static String version()      {  return "v1.4.0"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.4.0
+ *                Moved the schedule() statements to initialize() so they run on reboot too.
+ *                Distributed forecastPrecip() into sunRiseSetHandler, for the once a day portion; 
+ *                 and into calcTime and doPoll for the display of data.
+ *                Reworked updateLux() to use a schedule() vs chained runIn for robustness.
+ *                Moved sunRiseSet map from 'state' to 'data' storage to declutter State Variables.
+ *                Removed display: true from all sendEvent lines. Hubitat doesn't use it.
  *
  * Version: 1.3.1
  *                Corrected typos on twilight (astro vs civil)
@@ -35,7 +43,7 @@ public static String version()      {  return "v1.3.1"  }
  *
  * Version: 1.1.6
  *                Semaphore protecting sunrise/set poll if Apixu poll is incomplete.
- *                Reworked log.error messages for uniformity.
+ *                Reworked log.warn messages for uniformity.
  *                Merged Latitude/Longitude into a group selector.
  *
  * Version: 1.1.5
@@ -156,8 +164,9 @@ metadata    {
 	
 		command "refresh"
 //		command "WipeState"			// **---** delete for Release
-//		command "updateLux"			// **---** delete for Release
-//		command "pollSunRiseSet"			// **---** delete for Release
+		command "updateLux"			// **---** delete for Release
+		command "pollSunRiseSet"		// **---** delete for Release
+//		command "updateCheck"			// **---** delete for Release
  	}
 
 	def settingDescr = settingEnable ? "<br><i>Hide many of the Preferences to reduce the clutter, if needed, by turning OFF this toggle.</i><br>" : "<br><i>Many Preferences are available to you, if needed, by turning ON this toggle.</i><br>"
@@ -204,22 +213,15 @@ def refresh()	{ poll() }
 */
 def updated()   {
 	initialize()  // includes an unsubscribe()
-	schedule("23 10 0 ? * * *", pollSunRiseSet)
-	schedule("0 0 8 ? * FRI *", updateCheck)
-	state.tz_id = TimeZone.getDefault().getID()
 	state.clockSeconds = true
 	if (debugOutput) runIn(1800,logsOff)        // disable debug logs after 30 min
-	if (settingEnable) runIn(2100,SettingsOff)  // "roll up" (hide) the condition selectors after 35 min
+	if (settingEnable) runIn(2100,settingsOff)  // "roll up" (hide) the condition selectors after 35 min
 	if (pollEvery == "180") { "runEvery3Hours"(poll) }
 	   else if (pollEvery == "60") { "runEvery1Hour"(poll) }
 	   else { "runEvery${pollEvery}Minutes"(poll) }
-	state.luxNext = luxEvery.toInteger() * 60	
-	state.lowLuxRepeat = (lowLuxEvery == '999') ? luxEvery.toInteger() * 60 : lowLuxEvery.toInteger() * 60
 	if (dashClock)  updateClock();
 	poll()
 	if (descTextEnable) log.info "Updated with settings: ${settings}, $state.sunRiseSet"
-	runIn(4, updateLux)      // give sunrise/set time to complete.
-	runIn(20, updateCheck)  // verify version once
 }
 
 
@@ -232,92 +234,97 @@ def updated()   {
 def doPoll(obs) {
 	if (descTextEnable) log.info "wx-ApiXU poll for: $zipCode"
 	calcTime(obs)		// calculate all the time variables
-	sendEvent(name: "lastXUupdate", value: now, displayed: true)
+	sendEvent(name: "lastXUupdate", value: now)
 
 	// Update Attributes for the defined Capabilities
-	sendEvent(name: "humidity", value: obs.current.humidity.toFloat(), unit: "%", displayed: true)
-	sendEvent(name: "pressure", value: (isFahrenheit ? obs.current.pressure_in.toFloat() : obs.current.pressure_mb.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MBAR')}", displayed: true)
-	sendEvent(name: "temperature", value: (isFahrenheit ? obs.current.temp_f.toFloat() : obs.current.temp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
-	sendEvent(name: "ultravioletIndex", value: obs.current.uv.toFloat(), displayed: true)
+	sendEvent(name: "humidity", value: obs.current.humidity.toFloat(), unit: "%")
+	sendEvent(name: "pressure", value: (isFahrenheit ? obs.current.pressure_in.toFloat() : obs.current.pressure_mb.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MBAR')}")
+	sendEvent(name: "temperature", value: (isFahrenheit ? obs.current.temp_f.toFloat() : obs.current.temp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}")
+	sendEvent(name: "ultravioletIndex", value: obs.current.uv.toFloat())
 
 	if (localSunrisePublish) {
 		if (debugOutput) log.debug "localSunrise Group"
-		sendEvent(name: "local_sunrise", value: state.localSunrise, descriptionText: "Sunrise today is at $state.localSunrise", displayed: true)
-		sendEvent(name: "local_sunset", value: state.localSunset, descriptionText: "Sunset today at is $state.localSunset", displayed: true)
-		sendEvent(name: "localSunrise", value: state.localSunrise, displayed: true)
-		sendEvent(name: "localSunset", value: state.localSunset, displayed: true)
+		sendEvent(name: "local_sunrise", value: state.localSunrise, descriptionText: "Sunrise today is at $state.localSunrise")
+		sendEvent(name: "local_sunset", value: state.localSunset, descriptionText: "Sunset today at is $state.localSunset")
+		sendEvent(name: "localSunrise", value: state.localSunrise)
+		sendEvent(name: "localSunset", value: state.localSunset)
 	}
 	if (open_weatherPublish) {
 		if (debugOutput) log.debug "open_weather Group"
-		sendEvent(name: "weatherIcons", value: getOWIconName(obs.current.condition.code, obs.current.is_day), displayed: true)
-		sendEvent(name: "windSpeed", value: (isFahrenheit ? obs.current.wind_mph.toFloat() : obs.current.wind_kph.toFloat()), displayed: true)
-		sendEvent(name: "windDirection", value: obs.current.wind_degree.toInteger(), displayed: true)
+		sendEvent(name: "weatherIcons", value: getOWIconName(obs.current.condition.code, obs.current.is_day))
+		sendEvent(name: "windSpeed", value: (isFahrenheit ? obs.current.wind_mph.toFloat() : obs.current.wind_kph.toFloat()))
+		sendEvent(name: "windDirection", value: obs.current.wind_degree.toInteger())
 	}
 	if (tempHiLowPublish) {
 		if (debugOutput) log.debug "temp+1 Hi/Lo Group"
 		sendEvent(name: "temperatureHighDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.maxtemp_f.toFloat() :
-	                        obs.forecast.forecastday[0].day.maxtemp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
+	                        obs.forecast.forecastday[0].day.maxtemp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}")
 		sendEvent(name: "temperatureLowDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.mintemp_f.toFloat() :
-                            obs.forecast.forecastday[0].day.mintemp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
+                            obs.forecast.forecastday[0].day.mintemp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}")
 	}
-
 	if (latPublish) { // latitude and longitude group
 		if (debugOutput) log.debug "Lat/Long Group"
-		sendEvent(name: "lat", value: obs.location.lat.toFloat(), displayed: true)
-		sendEvent(name: "lon", value: obs.location.lon.toFloat(), displayed: true)
+		sendEvent(name: "lat", value: obs.location.lat.toFloat())
+		sendEvent(name: "lon", value: obs.location.lon.toFloat())
 	}
 
-	sendEventPublish(name: "city", value: (cityName ?: obs.location.name), displayed: true)
-	sendEventPublish(name: "cloud", value: obs.current.cloud.toInteger(), unit: "%", displayed: true)
-	sendEventPublish(name: "condition_code", value: obs.current.condition.code.toInteger(), displayed: true)
-	sendEventPublish(name: "condition_codeDayPlus1", value: obs.forecast.forecastday[0].day.condition.code.toInteger(), displayed: true)
-	sendEventPublish(name: "condition_icon_only", value: obs.current.condition.icon.split("/")[-1], displayed: true)
-	sendEventPublish(name: "condition_icon_url", value: 'https:' + obs.current.condition.icon, displayed: true)
-	sendEventPublish(name: "condition_icon", value: '<img src=https:' + obs.current.condition.icon + '>', displayed: true)
-	sendEventPublish(name: "condition_text", value: obs.current.condition.text, displayed: true)
-	sendEventPublish(name: "country", value: obs.location.country, displayed: true)
-	sendEventPublish(name: "feelsLike", value: (isFahrenheit ? obs.current.feelslike_f.toFloat() : obs.current.feelslike_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}", displayed: true)
-	sendEventPublish(name: "forecastIcon", value: getWUIconName(obs.current.condition.code, obs.current.is_day), displayed: true)
-	sendEventPublish(name: "is_day", value: obs.current.is_day.toInteger(), displayed: true)
-	sendEventPublish(name: "last_updated_epoch", value: obs.current.last_updated_epoch.toInteger(), displayed: true)
-	sendEventPublish(name: "last_updated", value: obs.current.last_updated, displayed: true)
-	sendEventPublish(name: "local_date", value: state.thisDate, displayed: true)
-	sendEventPublish(name: "local_time", value: state.thisTime, displayed: true)
-	sendEventPublish(name: "localtime_epoch", value: obs.location.localtime_epoch.toInteger(), displayed: true)
-	sendEventPublish(name: "location", value: obs.location.name + ', ' + obs.location.region, displayed: true)
-	sendEventPublish(name: "name", value: obs.location.name, displayed: true)
-	sendEventPublish(name: "percentPrecip", value: (isFahrenheit ? obs.current.precip_in.toFloat() : obs.current.precip_mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEventPublish(name: "region", value: obs.location.region, displayed: true)
-	sendEventPublish(name: "twilight_begin", value: state.twiBegin, descriptionText: "Twilight begins today at $state.twiBegin", displayed: true)
-	sendEventPublish(name: "twilight_end", value: state.twiEnd, descriptionText: "Twilight ends today at $state.twiEnd", displayed: true)	
-	sendEventPublish(name: "tz_id", value: obs.location.tz_id, displayed: true)
-	sendEventPublish(name: "visual", value: '<img src=' + imgName + '>', displayed: true)
-	sendEventPublish(name: "visualDayPlus1", value: '<img src=' + imgNamePlus1 + '>', displayed: true)
-	sendEventPublish(name: "visualDayPlus1WithText", value: '<img src=' + imgNamePlus1 + '><br>' + obs.forecast.forecastday[0].day.condition.text, displayed: true)
-	sendEventPublish(name: "visualWithText", value: '<img src=' + imgName + '><br>' + obs.current.condition.text, displayed: true)
-	sendEventPublish(name: "weather", value: obs.current.condition.text, displayed: true)
-	sendEventPublish(name: "wind_degree", value: obs.current.wind_degree.toInteger(), unit: "DEGREE", displayed: true)
-	sendEventPublish(name: "wind_dir", value: obs.current.wind_dir, displayed: true)
-	sendEventPublish(name: "wind_mytile", value: wind_mytile, displayed: true)
-	sendEventPublish(name: "wind", value: (isFahrenheit ? obs.current.wind_mph.toFloat() : obs.current.wind_kph.toFloat()), unit: "${(isFahrenheit ? 'MPH' : 'KPH')}", displayed: true)
+	sendEventPublish(name: "city", value: (cityName ?: obs.location.name))
+	sendEventPublish(name: "cloud", value: obs.current.cloud.toInteger(), unit: "%")
+	sendEventPublish(name: "condition_code", value: obs.current.condition.code.toInteger())
+	sendEventPublish(name: "condition_codeDayPlus1", value: obs.forecast.forecastday[0].day.condition.code.toInteger())
+	sendEventPublish(name: "condition_icon_only", value: obs.current.condition.icon.split("/")[-1])
+	sendEventPublish(name: "condition_icon_url", value: 'https:' + obs.current.condition.icon)
+	sendEventPublish(name: "condition_icon", value: '<img src=https:' + obs.current.condition.icon + '>')
+	sendEventPublish(name: "condition_text", value: obs.current.condition.text)
+	sendEventPublish(name: "country", value: obs.location.country)
+	sendEventPublish(name: "feelsLike", value: (isFahrenheit ? obs.current.feelslike_f.toFloat() : obs.current.feelslike_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}")
+	sendEventPublish(name: "forecastIcon", value: getWUIconName(obs.current.condition.code, obs.current.is_day))
+	sendEventPublish(name: "is_day", value: obs.current.is_day.toInteger())
+	sendEventPublish(name: "last_updated_epoch", value: obs.current.last_updated_epoch.toInteger())
+	sendEventPublish(name: "last_updated", value: obs.current.last_updated)
+	sendEventPublish(name: "local_date", value: state.thisDate)
+	sendEventPublish(name: "local_time", value: state.thisTime)
+	sendEventPublish(name: "localtime_epoch", value: obs.location.localtime_epoch.toInteger())
+	sendEventPublish(name: "location", value: obs.location.name + ', ' + obs.location.region)
+	sendEventPublish(name: "name", value: obs.location.name)
+	sendEventPublish(name: "percentPrecip", value: (isFahrenheit ? obs.current.precip_in.toFloat() : obs.current.precip_mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+	sendEventPublish(name: "region", value: obs.location.region)
+	sendEventPublish(name: "twilight_begin", value: state.twiBegin, descriptionText: "Twilight begins today at $state.twiBegin")
+	sendEventPublish(name: "twilight_end", value: state.twiEnd, descriptionText: "Twilight ends today at $state.twiEnd")	
+	sendEventPublish(name: "tz_id", value: obs.location.tz_id)
+	sendEventPublish(name: "visual", value: '<img src=' + imgName + '>')
+	sendEventPublish(name: "visualDayPlus1", value: '<img src=' + imgNamePlus1 + '>')
+	sendEventPublish(name: "visualDayPlus1WithText", value: '<img src=' + imgNamePlus1 + '><br>' + obs.forecast.forecastday[0].day.condition.text)
+	sendEventPublish(name: "visualWithText", value: '<img src=' + imgName + '><br>' + obs.current.condition.text)
+	sendEventPublish(name: "weather", value: obs.current.condition.text)
+	sendEventPublish(name: "wind_degree", value: obs.current.wind_degree.toInteger(), unit: "DEGREE")
+	sendEventPublish(name: "wind_dir", value: obs.current.wind_dir)
+	sendEventPublish(name: "wind_mytile", value: wind_mytile)
+	sendEventPublish(name: "wind", value: (isFahrenheit ? obs.current.wind_mph.toFloat() : obs.current.wind_kph.toFloat()), unit: "${(isFahrenheit ? 'MPH' : 'KPH')}")
 
 	if (isFahrenheit)	{
-		sendEventPublish(name: "wind_mph", value: obs.current.wind_mph.toFloat(), unit: "MPH", displayed: true)
-		sendEventPublish(name: "precip_in", value: obs.current.precip_in.toFloat(), unit: "IN", displayed: true)
-		sendEventPublish(name: "feelslike_f", value: obs.current.feelslike_f.toFloat(), unit: "F", displayed: true)
-		sendEventPublish(name: "vis_miles", value: obs.current.vis_miles.toFloat(), unit: "MILES", displayed: true)
+		sendEventPublish(name: "wind_mph", value: obs.current.wind_mph.toFloat(), unit: "MPH")
+		sendEventPublish(name: "precip_in", value: obs.current.precip_in.toFloat(), unit: "IN")
+		sendEventPublish(name: "feelslike_f", value: obs.current.feelslike_f.toFloat(), unit: "F")
+		sendEventPublish(name: "vis_miles", value: obs.current.vis_miles.toFloat(), unit: "MILES")
 	}
 	else {
-		sendEventPublish(name: "wind_kph", value: obs.current.wind_kph.toFloat(), unit: "KPH", displayed: true)
-		sendEventPublish(name: "wind_mps", value: ((obs.current.wind_kph / 3.6f).round(1).toFloat()), unit: "MPS", displayed: true)
-		sendEventPublish(name: "precip_mm", value: obs.current.precip_mm.toFloat(), unit: "MM", displayed: true)
-		sendEventPublish(name: "feelsLike_c", value: obs.current.feelslike_c.toFloat(), unit: "C", displayed: true)
-		sendEventPublish(name: "vis_km", value: obs.current.vis_km.toFloat(), unit: "KM", displayed: true)
+		sendEventPublish(name: "wind_kph", value: obs.current.wind_kph.toFloat(), unit: "KPH")
+		sendEventPublish(name: "wind_mps", value: ((obs.current.wind_kph / 3.6f).round(1).toFloat()), unit: "MPS")
+		sendEventPublish(name: "precip_mm", value: obs.current.precip_mm.toFloat(), unit: "MM")
+		sendEventPublish(name: "feelsLike_c", value: obs.current.feelslike_c.toFloat(), unit: "C")
+		sendEventPublish(name: "vis_km", value: obs.current.vis_km.toFloat(), unit: "KM")
+	}
+	if (precipExtendedPublish) {
+		if (debugOutput) log.debug "Extended Precip Group"
+		sendEvent(name: "precipDayMinus2", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus2.inch.toFloat() : state.forecastPrecip.precipDayMinus2.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDayMinus1", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus1.inch.toFloat() : state.forecastPrecip.precipDayMinus1.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDay0", value: (isFahrenheit ? state.forecastPrecip.precipDay0.inch.toFloat() : state.forecastPrecip.precipDay0.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDayPlus1", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus1.inch.toFloat() : state.forecastPrecip.precipDayPlus1.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDayPlus2", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus2.inch.toFloat() : state.forecastPrecip.precipDayPlus2.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
 	}
 
-	sendEventPublish(name: "mytile", value: mytext, displayed: true)
-
-	forecastPrecip(obs.forecast)
+	sendEventPublish(name: "mytile", value: mytext)
 
 	return
 }
@@ -368,23 +375,31 @@ def pollSunRiseSet() {
 		asynchttpGet("sunRiseSetHandler", requestParams)
 	} else {
 		state.sunRiseSet.init = false
-		log.error "wx-ApiXU no sunrise-sunset without Lat/Long."
+		log.warn "wx-ApiXU no sunrise-sunset without Lat/Long."
 	}
 }
 
 
 def sunRiseSetHandler(resp, data) {
 	if(resp.getStatus() == 200 || resp.getStatus() == 207) {
-		state.sunRiseSet = resp.getJson().results
+		sunRiseSet = resp.getJson().results
+		updateDataValue("sunRiseSet", resp.data)
 		state.sunRiseSet.init = true
-		//if (debugOutput) log.debug "sunRiseSet: $state.sunRiseSet"
-		state.localSunrise = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunrise).format("HH:mm")
-		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.sunset).format("HH:mm")
-		state.twiBegin = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_begin).format("HH:mm")
-		state.twiEnd   = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", state.sunRiseSet.civil_twilight_end).format("HH:mm")
+		state.localSunrise = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.sunrise).format("HH:mm")
+		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.sunset).format("HH:mm")
+		state.twiBegin     = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.civil_twilight_begin).format("HH:mm")
+		state.twiEnd       = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.civil_twilight_end).format("HH:mm")
+
+		state.forecastPrecip.precipDayMinus2 = state?.forecastPrecip?.precipDayMinus1
+		state.forecastPrecip.precipDayMinus1 = state?.forecastPrecip?.precipDay0
 	} else {
-		log.error "wx-ApiXU sunrise-sunset api did not return data: $resp"
+		log.warn "wx-ApiXU sunrise-sunset api did not return data: $resp"
+		state.sunRiseSet.init = false
 	}
+}
+
+private isConfigured() {
+    getDataValue("configured") == "true"
 }
 
 
@@ -395,20 +410,20 @@ def sunRiseSetHandler(resp, data) {
 	
 	Notes: minimum Lux is a value of 5 after dark.
 */
-def updateLux()     {
-	runIn(state.luxNext, updateLux)
+def updateLux() {
 	if (state?.sunRiseSet?.init) { 
 		if (descTextEnable) log.info "wx-ApiXU lux calc for: $zipCode" // ", $state.loc_lat, $state.localSunset"	
 		def (lux, bwn) = estimateLux(state.condition_code, state.cloud)
-		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux", displayed: true)
-		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux), displayed: true)
-		sendEventPublish(name: "betwixt", value: bwn, displayed: true)
-		state.luxNext = (lux > 6) ? state.luxNext.toInteger() : state.lowLuxRepeat.toInteger()
-        	//if (debugOutput) log.debug "Lux: $lux, $state.luxNext"
+		state.luxNext = (lux > 6) ? true : false 
+		state.luxNext ? { schedule("0 0/${luxEvery} * * * ?", updateLux) } : {if (lowLuxEvery != 999) { schedule("0 0/${lowLuxEvery} * * * ?", updateLux) } }
+        	//if (debugOutput) log.debug "Lux: $lux, $state.luxNext, $bwn"
+      
+		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux")
+		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux))
+		sendEventPublish(name: "betwixt", value: bwn)
 	} else {
-		if (descTextEnable) log.info "no wx-ApiXU lux without sunRiseSet value."
+		if (descTextEnable) log.warn "no wx-ApiXU lux without sunRiseSet value."
 		runIn(2, pollSunRiseSet) 
-		// pollSunRiseSet()
 	}
 }
 
@@ -419,18 +434,19 @@ def estimateLux(condition_code, cloud)     {
 	def l
 	def bwn
 
+	def sunRiseSet           = parseJson(getDataValue("sunRiseSet")).results
 	def tZ                   = TimeZone.getTimeZone(state.tz_id)
 	def lT                   = new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX", tZ)
 	def localeMillis         = getEpoch(lT)
-	def sunriseTimeMillis    = getEpoch(state.sunRiseSet.sunrise)
-	def sunsetTimeMillis     = getEpoch(state.sunRiseSet.sunset)
-	def noonTimeMillis       = getEpoch(state.sunRiseSet.solar_noon)
-	def twilight_beginMillis = getEpoch(state.sunRiseSet.civil_twilight_begin)
-	def twilight_endMillis   = getEpoch(state.sunRiseSet.civil_twilight_end)
+	def sunriseTimeMillis    = getEpoch(sunRiseSet.sunrise)
+	def sunsetTimeMillis     = getEpoch(sunRiseSet.sunset)
+	def noonTimeMillis       = getEpoch(sunRiseSet.solar_noon)
+	def twilight_beginMillis = getEpoch(sunRiseSet.civil_twilight_begin)
+	def twilight_endMillis   = getEpoch(sunRiseSet.civil_twilight_end)
 	// log.debug "millis: $lT, $localeMillis, $twilight_beginMillis, $sunriseTimeMillis, $noonTimeMillis, $sunsetTimeMillis, $twilight_endMillis"
 
 	if (   localeMillis > twilight_beginMillis   && localeMillis < sunriseTimeMillis)  {
-		bwn = "between sunrise and twilight" 
+		bwn = "between twilight and sunrise" 
 		l = (((localeMillis - twilight_beginMillis) * 50f) / (sunriseTimeMillis - twilight_beginMillis))
 		lux = (l < 10f ? 10l : l.trunc(0) as long)
 	}
@@ -456,31 +472,26 @@ def estimateLux(condition_code, cloud)     {
 	}
 
 	def cC = condition_code.toInteger()
-//	def cCT = ''
 	def cCF
 	if (aFCC)
 	    if (imgCondMap[cC].condCode)
 	    {
 	      cCF = imgCondMap[cC].condCode[1]
-//	      cCT = imgCondMap[cC].condCode[0]
 	    }
 	    else
 	    {
 		// factor in cloud cover if available
 		cCF = state.apixu.init ? ((100 - (cloud.toInteger() / 3d)) / 100) : 0.998d
    		// log.debug "zzz: $l $cloud $cCF, $lux, $bwn, $state.apixu.init"
-//	      cCT = 'using cloud cover'
 	    }
 	else
 	{
 	    cCF = 1.0
-//	    cCT = 'night time now'
 	}
 	
 	lux = (lux * cCF) as long
-//	if (debugOutput) log.debug "condition: $cC | condition text: $cCT | condition factor: $cCF | lux: $lux"
 	if (debugOutput) log.debug "condition: $cC | condition factor: $cCF | lux: $lux"
-	sendEventPublish(name: "cCF", value: cCF, displayed: true)
+	sendEventPublish(name: "cCF", value: cCF)
 	
 	return [lux, bwn]
 }
@@ -502,7 +513,6 @@ def calcTime(wxData) {
 	state.tz_id     = wxData.location.tz_id ?: TimeZone.getDefault().getID()
 	state.thisDate  = Date.parse("yyyy-MM-dd HH:mm", wxData.location.localtime).format("yyyy-MM-dd")
 	state.thisTime  = Date.parse("yyyy-MM-dd HH:mm", wxData.location.localtime).format("HH:mm")
-	// if (debugOutput) log.debug "calcTime: $state" // ".sunRiseSet"
 	
 	imgName = getImgName(wxData.current.condition.code, wxData.current.is_day)
 	imgNamePlus1 = getImgName(wxData.forecast.forecastday[0].day.condition.code, 1)
@@ -515,6 +525,13 @@ def calcTime(wxData) {
 	mytext += (wind_mytile == (isFahrenheit ? "0 mph " : "0 kph ") ? '<br> Wind is calm' : '<br>' + wxData.current.wind_dir + ' ' + wind_mytile)
 	mytext += '<br>' + wxData.current.condition.text
 	//if (debugOutput) log.debug "mytext: $mytext"
+
+	state.forecastPrecip.precipDay0.mm = wxData.forecast.forecastday[0].day.totalprecip_mm
+	state.forecastPrecip.precipDay0.inch = wxData.forecast.forecastday[0].day.totalprecip_in
+	state.forecastPrecip.precipDayPlus1.mm = wxData.forecast.forecastday[1].day.totalprecip_mm
+	state.forecastPrecip.precipDayPlus1.inch = wxData.forecast.forecastday[1].day.totalprecip_in
+	state.forecastPrecip.precipDayPlus2.mm = wxData.forecast.forecastday[2].day.totalprecip_mm
+	state.forecastPrecip.precipDayPlus2.inch = wxData.forecast.forecastday[2].day.totalprecip_in
 }
 
 
@@ -524,7 +541,7 @@ def logsOff(){
 }
 
 
-def SettingsOff(){
+def settingsOff(){
 	log.warn "Settings disabled..."
 	device.updateSetting("settingEnable",[value:"false",type:"bool"])
 }
@@ -570,45 +587,13 @@ def updateClock()       {
 	runIn(2, updateClock)
 	if (!state.tz_id)       return;
 	def nowTime = new Date()
-	sendEventPublish(name: "local_time", value: nowTime.format((state.clockSeconds ? "HH:mm" : "HH mm"), location.timeZone), displayed: true)
+	sendEventPublish(name: "local_time", value: nowTime.format((state.clockSeconds ? "HH:mm" : "HH mm"), location.timeZone))
 	def localDate = nowTime.format("yyyy-MM-dd", location.timeZone)
 	if (localDate != state.localDate) {
 		state.localDate = localDate
-		sendEventPublish(name: "local_date", value: localDate, displayed: true)
+		sendEventPublish(name: "local_date", value: localDate)
 	}
 	state.clockSeconds = (state.clockSeconds ? false : true)
-}
-
-
-def forecastPrecip(forecast)	{
-	if (state?.forecastPrecip?.init == null) {
-	    state.forecastPrecip = [
-    	    	date: null,
-    	    	precipDayMinus2: [inch: 999.9, mm: 999.9],
-    	    	precipDayMinus1: [inch: 999.9, mm: 999.9],
-    	    	precipDay0:	     [inch: 999.9, mm: 999.9],
-    	    	precipDayPlus1:  [inch: 999.9, mm: 999.9],
-    	    	precipDayPlus2:  [inch: 999.9, mm: 999.9],
-    	    	init:            true
-    	   ]
-	}
-	if (state.thisDate == state.forecastPrecip.date || state?.sunRiseSet == null || !precipExtendedPublish) { if (descTextEnable) log.info "skip wx-ApiXU forecast precip this cycle"; return }
-
-	state.forecastPrecip.date = state.thisDate
-	state.forecastPrecip.precipDayMinus2 = state.forecastPrecip.precipDayMinus1
-	state.forecastPrecip.precipDayMinus1 = state.forecastPrecip.precipDay0
-	state.forecastPrecip.precipDay0 = state.forecastPrecip.precipDayPlus1
-	state.forecastPrecip.precipDayPlus1.mm = forecast.forecastday[0].day.totalprecip_mm
-	state.forecastPrecip.precipDayPlus1.inch = forecast.forecastday[0].day.totalprecip_in
-	state.forecastPrecip.precipDayPlus2.mm = forecast.forecastday[1].day.totalprecip_mm
-	state.forecastPrecip.precipDayPlus2.inch = forecast.forecastday[1].day.totalprecip_in
-
-	if (debugOutput) log.debug "Extended Precip Group"
-	sendEvent(name: "precipDayMinus2", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus2.inch.toFloat() : state.forecastPrecip.precipDayMinus2.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEvent(name: "precipDayMinus1", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus1.inch.toFloat() : state.forecastPrecip.precipDayMinus1.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEvent(name: "precipDay0", value: (isFahrenheit ? state.forecastPrecip.precipDay0.inch.toFloat() : state.forecastPrecip.precipDay0.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEvent(name: "precipDayPlus1", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus1.inch.toFloat() : state.forecastPrecip.precipDayPlus1.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
-	sendEvent(name: "precipDayPlus2", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus2.inch.toFloat() : state.forecastPrecip.precipDayPlus2.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}", displayed: true)
 }
 
 
@@ -758,46 +743,68 @@ def getImgName(wCode, is_day)       {
 /*
 
 	generic driver stuff
-
+  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 */
 
 
 /*
 	installed
-    
+
 	Doesn't do much other than call initialize().
 */
 def installed()
 {
-	if (descTextEnable) log.info "$InternalName is Installed"
+	if (descTextEnable) log.info "${state.InternalName ?: device} is Installed"
 	state.driverInstalled = true
 	initialize()
 }
 
 
 
-
-
 /*
 	initialize
-    
+
+	called by a reboot and by methods internal to this driver: updated() and installed()
 */
 def initialize()
 {
 	unschedule()
+	migrateTo()		// an effort to migrate from pre v1.4.0 to v1.4.0
+	schedule("23 10 0 ? * * *", pollSunRiseSet)
+	schedule("0 0 8 ? * FRI *", updateCheck)
+	schedule("0 0/${luxEvery} * * * ?", updateLux)
+	state.tz_id = TimeZone.getDefault().getID()
 	if (state?.sunRiseSet?.init == null) state.sunRiseSet = [init:false]
 	if (state?.apixu?.init      == null) state.apixu      = [init:false]
-	state.luxNext = 30
-	log.trace "$InternalName was initialized"
+	if (state?.forecastPrecip?.init == null) {
+	    state.forecastPrecip = [
+    	    	precipDayMinus2: [inch: 999.9, mm: 999.9],
+    	    	precipDayMinus1: [inch: 999.9, mm: 999.9],
+    	    	precipDay0:	     [inch: 999.9, mm: 999.9],
+    	    	precipDayPlus1:  [inch: 999.9, mm: 999.9],
+    	    	precipDayPlus2:  [inch: 999.9, mm: 999.9],
+    	    	init: true
+    	   ]
+	}
+	log.trace "${state.InternalName ?: device} was initialized"
+	runIn(4, updateLux)      // give sunrise/set time to complete.
+	runIn(20, updateCheck)  // verify version once
 }
 
 
+private migrateTo() {
+	if (state?.sunRiseSet?.init) {
+		pollSunRiseSet()
+		state.remove("sunRiseSet") // converted to 'data' storage, no longer need 'state' storage.
+		state.remove("lowLuxRepeat") // using schedule(), no longer need 'state' storage.
+	}
+}
 
 
 // Check Version   ***** with great thanks and acknowledgment to Cobra (CobraVmax) for his original code ****
 def updateCheck()
 {    
-	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU/version.json"]
+	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU/version2.json"]
 	
  	asynchttpGet("updateCheckHandler", paramsUD) 
 }
@@ -810,31 +817,33 @@ def updateCheckHandler(resp, data) {
 		respUD = parseJson(resp.data)
 		//log.warn " Version Checking - Response Data: $respUD"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
 		state.Copyright = "${thisCopyright}"
-		def newVerRaw = (respUD.versions.Driver.(state.InternalName))
-		def newVer = (respUD.versions.Driver.(state.InternalName).replaceAll("[.vV]", ""))
+		// uses reformattted 'version2.json' 
+		def newVerRaw = (respUD.driver.(state.InternalName).ver)
+		def newVer = (respUD.driver.(state.InternalName).ver.replaceAll("[.vV]", ""))
 		def currentVer = version().replaceAll("[.vV]", "")                
-		state.UpdateInfo = (respUD.versions.UpdateInfo.Driver.(state.InternalName))
-		state.author = (respUD.author)
+		state.UpdateInfo = (respUD.driver.(state.InternalName).updated)
+		def author = (respUD.author)
+            // log.debug "updateCheck: $newVerRaw, $state.UpdateInfo, $author"
 	
 		if(newVer == "NLS")
 		{
-		      state.Status = "<b>** This driver is no longer supported by $state.author  **</b>"       
-		      log.warn "** This driver is no longer supported by $state.author **"      
+		      state.Status = "<b>** This Driver is no longer supported by $author  **</b>"       
+		      log.warn "** This Driver is no longer supported by $author **"      
 		}           
 		else if(currentVer < newVer)
 		{
 		      state.Status = "<b>New Version Available (Version: $newVerRaw)</b>"
-		      log.warn "** There is a newer version of this driver available  (Version: $newVerRaw) **"
+		      log.warn "** There is a newer version of this Driver available  (Version: $newVerRaw) **"
 		      log.warn "** $state.UpdateInfo **"
 		} 
 		else if(currentVer > newVer)
 		{
-		      state.Status = "<b>You are using a Test version of this Driver (Version: $newVerRaw)</b>"
+		      state.Status = "<b>You are using a Test version of this Driver (Expecting: $newVerRaw)</b>"
 		}
 		else
 		{ 
 		    state.Status = "Current"
-		    if (descTextEnable) log.info "You are using the current version of this driver"
+		    if (descTextEnable) log.info "You are using the current version of this Driver"
 		}
 	
 	      if(state.Status == "Current")
@@ -851,7 +860,7 @@ def updateCheckHandler(resp, data) {
       }
       else
       {
-           log.error "Something went wrong: CHECK THE JSON FILE AND IT'S URI"
+           log.warn "Something went wrong: CHECK THE JSON FILE AND IT'S URI"
       }
 }
 
