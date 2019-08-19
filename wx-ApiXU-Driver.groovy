@@ -6,9 +6,12 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.4.0"  }
+public static String version()      {  return "v1.4.1"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.4.1
+ *                Corrected typo for forecastIcon (in getWUIconName)
  *
  * Version: 1.4.0
  *                Moved the schedule() statements to initialize() so they run on reboot too.
@@ -604,7 +607,7 @@ def updateClock()       {
 
 */
 def getWUIconName(condition_code, is_day)     {
-   def wIcon = imgCondMap[condition_code].condCode ? imgCondMap[condition_code].condCode[2] : ''
+   def wuIcon = imgCondMap[condition_code].condCode[0] ? imgCondMap[condition_code].condCode[2] : ''
     if (is_day != 1 && wuIcon) wuIcon = 'nt_' + wuIcon;
     return wuIcon
 }
@@ -617,7 +620,7 @@ def getWUIconName(condition_code, is_day)     {
 
 */
 def getOWIconName(condition_code, is_day)     {
-    def wIcon = imgCondMap[condition_code].condCode ? imgCondMap[condition_code].condCode[3] : ''
+    def wIcon = imgCondMap[condition_code].condCode[0] ? imgCondMap[condition_code].condCode[3] : ''
     return is_day ? wIcon + 'd' : wIcon + 'n'
 }
 
