@@ -22,10 +22,13 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v1.5.2"  }
+ public static String version()      {  return "v1.5.3"  }
 
 /***********************************************************************************************************************
  *
+ *
+ * Version: 1.5.3
+ *                Corrected typing on illuminance to Integer.
  *
  * Version: 1.5.2
  *                Moved the subscribe statements to initialize().
@@ -100,7 +103,6 @@ def updated()
 	pollSunRiseSet
 	pollEvery = luxEvery
 	"runEvery${pollEvery}Minutes"(pollApixu) 
-	state.remove("sunRiseSet")
 }
 
 
@@ -193,7 +195,7 @@ def pollSunRiseSet() {
 		if (descTextEnable) log.info "SunRiseSet poll for $location.latitude  $location.longitude " //: $requestParams"
 		asynchttpGet("sunRiseSetHandler", requestParams)
 	} else {
-		state.sunRiseSet.init = false
+		state?.sunRiseSet?.init = false
 		log.error "No sunrise-sunset without Lat/Long."
 	}
 }
@@ -203,7 +205,7 @@ def sunRiseSetHandler(resp, data) {
 	if(resp.getStatus() == 200 || resp.getStatus() == 207) {
 		sunRiseSet = resp.getJson().results
         	updateDataValue("sunRiseSet", resp.getData())
-		state.sunRiseSet.init = true
+		state?.sunRiseSet?.init = true
 		//if (debugOutput) log.debug "sunRiseSet: $state.sunRiseSet"
 		state.localSunrise = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.sunrise).format("HH:mm")
 		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.sunset).format("HH:mm")
@@ -221,7 +223,7 @@ def sunRiseSetHandler(resp, data) {
 	Notes: very, very simple, all the action is in the handler.
 */
 def pollApixu() {
-	state.apixu.init = false
+	state?.apixu?.init = false
 	if (apixuKey) {
 		def requestParams = [ uri: "https://api.apixu.com/v1/current.json?key=$apixuKey&q=$location.latitude,$location.longitude&days=3" ]
 		if (descTextEnable) log.info "Luxuriant-ApiXU poll for Cloud Data " //: $requestParams"
@@ -240,11 +242,11 @@ def apixuHandler(resp, data) {
 	if(resp.getStatus() == 200 || resp.getStatus() == 207) {
 		obs = parseJson(resp.data)
         	if (debugOutput) log.debug "Luxuriant-ApiXU returned: $obs"
-		state.apixu.init = true
+		state?.apixu?.init = true
 		state.cloud = obs.current.cloud
 	} else {
 		log.error "Luxuriant-ApiXU weather api did not return data: $resp"
-		state.apixu.init = false
+		state?.apixu?.init = false
 	}
 }
 
