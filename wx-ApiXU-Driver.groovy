@@ -6,9 +6,15 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.4.1"  }
+public static String version()      {  return "v1.4.3"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.4.3
+ *                Change "float" values to BigDecimal or Integer.
+ *
+ * Version: 1.4.2
+ *                Skip forecastPrecip and mytile data calculations if the user hasn't enabled them.
  *
  * Version: 1.4.1
  *                Corrected typo for forecastIcon (in getWUIconName)
@@ -240,10 +246,10 @@ def doPoll(obs) {
 	sendEvent(name: "lastXUupdate", value: now)
 
 	// Update Attributes for the defined Capabilities
-	sendEvent(name: "humidity", value: obs.current.humidity.toFloat(), unit: "%")
-	sendEvent(name: "pressure", value: (isFahrenheit ? obs.current.pressure_in.toFloat() : obs.current.pressure_mb.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MBAR')}")
-	sendEvent(name: "temperature", value: (isFahrenheit ? obs.current.temp_f.toFloat() : obs.current.temp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}")
-	sendEvent(name: "ultravioletIndex", value: obs.current.uv.toFloat())
+	sendEvent(name: "humidity", value: obs.current.humidity.toInteger(), unit: "%")
+	sendEvent(name: "pressure", value: (isFahrenheit ? obs.current.pressure_in.toInteger() : obs.current.pressure_mb.toInteger()), unit: "${(isFahrenheit ? 'IN' : 'MBAR')}")
+	sendEvent(name: "temperature", value: (isFahrenheit ? obs.current.temp_f.toBigDecimal() : obs.current.temp_c.toBigDecimal()), unit: "${(isFahrenheit ? 'F' : 'C')}")
+	sendEvent(name: "ultravioletIndex", value: obs.current.uv.toInteger())
 
 	if (localSunrisePublish) {
 		if (debugOutput) log.debug "localSunrise Group"
@@ -255,20 +261,20 @@ def doPoll(obs) {
 	if (open_weatherPublish) {
 		if (debugOutput) log.debug "open_weather Group"
 		sendEvent(name: "weatherIcons", value: getOWIconName(obs.current.condition.code, obs.current.is_day))
-		sendEvent(name: "windSpeed", value: (isFahrenheit ? obs.current.wind_mph.toFloat() : obs.current.wind_kph.toFloat()))
+		sendEvent(name: "windSpeed", value: (isFahrenheit ? obs.current.wind_mph.toInteger() : obs.current.wind_kph.toInteger()))
 		sendEvent(name: "windDirection", value: obs.current.wind_degree.toInteger())
 	}
 	if (tempHiLowPublish) {
 		if (debugOutput) log.debug "temp+1 Hi/Lo Group"
-		sendEvent(name: "temperatureHighDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.maxtemp_f.toFloat() :
-	                        obs.forecast.forecastday[0].day.maxtemp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}")
-		sendEvent(name: "temperatureLowDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.mintemp_f.toFloat() :
-                            obs.forecast.forecastday[0].day.mintemp_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}")
+		sendEvent(name: "temperatureHighDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.maxtemp_f.toInteger() :
+	                        obs.forecast.forecastday[0].day.maxtemp_c.toInteger()), unit: "${(isFahrenheit ? 'F' : 'C')}")
+		sendEvent(name: "temperatureLowDayPlus1", value: (isFahrenheit ? obs.forecast.forecastday[0].day.mintemp_f.toInteger() :
+                            obs.forecast.forecastday[0].day.mintemp_c.toInteger()), unit: "${(isFahrenheit ? 'F' : 'C')}")
 	}
 	if (latPublish) { // latitude and longitude group
 		if (debugOutput) log.debug "Lat/Long Group"
-		sendEvent(name: "lat", value: obs.location.lat.toFloat())
-		sendEvent(name: "lon", value: obs.location.lon.toFloat())
+		sendEvent(name: "lat", value: obs.location.lat.toBigDecimal())
+		sendEvent(name: "lon", value: obs.location.lon.toBigDecimal())
 	}
 
 	sendEventPublish(name: "city", value: (cityName ?: obs.location.name))
@@ -280,7 +286,7 @@ def doPoll(obs) {
 	sendEventPublish(name: "condition_icon", value: '<img src=https:' + obs.current.condition.icon + '>')
 	sendEventPublish(name: "condition_text", value: obs.current.condition.text)
 	sendEventPublish(name: "country", value: obs.location.country)
-	sendEventPublish(name: "feelsLike", value: (isFahrenheit ? obs.current.feelslike_f.toFloat() : obs.current.feelslike_c.toFloat()), unit: "${(isFahrenheit ? 'F' : 'C')}")
+	sendEventPublish(name: "feelsLike", value: (isFahrenheit ? obs.current.feelslike_f.toBigDecimal() : obs.current.feelslike_c.toBigDecimal()), unit: "${(isFahrenheit ? 'F' : 'C')}")
 	sendEventPublish(name: "forecastIcon", value: getWUIconName(obs.current.condition.code, obs.current.is_day))
 	sendEventPublish(name: "is_day", value: obs.current.is_day.toInteger())
 	sendEventPublish(name: "last_updated_epoch", value: obs.current.last_updated_epoch.toInteger())
@@ -290,7 +296,7 @@ def doPoll(obs) {
 	sendEventPublish(name: "localtime_epoch", value: obs.location.localtime_epoch.toInteger())
 	sendEventPublish(name: "location", value: obs.location.name + ', ' + obs.location.region)
 	sendEventPublish(name: "name", value: obs.location.name)
-	sendEventPublish(name: "percentPrecip", value: (isFahrenheit ? obs.current.precip_in.toFloat() : obs.current.precip_mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+	sendEventPublish(name: "percentPrecip", value: (isFahrenheit ? obs.current.precip_in.toBigDecimal() : obs.current.precip_mm.toBigDecimal()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
 	sendEventPublish(name: "region", value: obs.location.region)
 	sendEventPublish(name: "twilight_begin", value: state.twiBegin, descriptionText: "Twilight begins today at $state.twiBegin")
 	sendEventPublish(name: "twilight_end", value: state.twiEnd, descriptionText: "Twilight ends today at $state.twiEnd")	
@@ -303,28 +309,28 @@ def doPoll(obs) {
 	sendEventPublish(name: "wind_degree", value: obs.current.wind_degree.toInteger(), unit: "DEGREE")
 	sendEventPublish(name: "wind_dir", value: obs.current.wind_dir)
 	sendEventPublish(name: "wind_mytile", value: wind_mytile)
-	sendEventPublish(name: "wind", value: (isFahrenheit ? obs.current.wind_mph.toFloat() : obs.current.wind_kph.toFloat()), unit: "${(isFahrenheit ? 'MPH' : 'KPH')}")
+	sendEventPublish(name: "wind", value: (isFahrenheit ? obs.current.wind_mph.toInteger() : obs.current.wind_kph.toInteger()), unit: "${(isFahrenheit ? 'MPH' : 'KPH')}")
 
 	if (isFahrenheit)	{
-		sendEventPublish(name: "wind_mph", value: obs.current.wind_mph.toFloat(), unit: "MPH")
-		sendEventPublish(name: "precip_in", value: obs.current.precip_in.toFloat(), unit: "IN")
-		sendEventPublish(name: "feelslike_f", value: obs.current.feelslike_f.toFloat(), unit: "F")
-		sendEventPublish(name: "vis_miles", value: obs.current.vis_miles.toFloat(), unit: "MILES")
+		sendEventPublish(name: "wind_mph", value: obs.current.wind_mph.toBigDecimal(), unit: "MPH")
+		sendEventPublish(name: "precip_in", value: obs.current.precip_in.toBigDecimal(), unit: "IN")
+		sendEventPublish(name: "feelslike_f", value: obs.current.feelslike_f.toBigDecimal(), unit: "F")
+		sendEventPublish(name: "vis_miles", value: obs.current.vis_miles.toBigDecimal(), unit: "MILES")
 	}
 	else {
-		sendEventPublish(name: "wind_kph", value: obs.current.wind_kph.toFloat(), unit: "KPH")
-		sendEventPublish(name: "wind_mps", value: ((obs.current.wind_kph / 3.6f).round(1).toFloat()), unit: "MPS")
-		sendEventPublish(name: "precip_mm", value: obs.current.precip_mm.toFloat(), unit: "MM")
-		sendEventPublish(name: "feelsLike_c", value: obs.current.feelslike_c.toFloat(), unit: "C")
-		sendEventPublish(name: "vis_km", value: obs.current.vis_km.toFloat(), unit: "KM")
+		sendEventPublish(name: "wind_kph", value: obs.current.wind_kph.toBigDecimal(), unit: "KPH")
+		sendEventPublish(name: "wind_mps", value: ((obs.current.wind_kph / 3.6f).round(1).toBigDecimal()), unit: "MPS")
+		sendEventPublish(name: "precip_mm", value: obs.current.precip_mm.toBigDecimal(), unit: "MM")
+		sendEventPublish(name: "feelsLike_c", value: obs.current.feelslike_c.toBigDecimal(), unit: "C")
+		sendEventPublish(name: "vis_km", value: obs.current.vis_km.toInteger(), unit: "KM")
 	}
 	if (precipExtendedPublish) {
 		if (debugOutput) log.debug "Extended Precip Group"
-		sendEvent(name: "precipDayMinus2", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus2.inch.toFloat() : state.forecastPrecip.precipDayMinus2.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
-		sendEvent(name: "precipDayMinus1", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus1.inch.toFloat() : state.forecastPrecip.precipDayMinus1.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
-		sendEvent(name: "precipDay0", value: (isFahrenheit ? state.forecastPrecip.precipDay0.inch.toFloat() : state.forecastPrecip.precipDay0.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
-		sendEvent(name: "precipDayPlus1", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus1.inch.toFloat() : state.forecastPrecip.precipDayPlus1.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
-		sendEvent(name: "precipDayPlus2", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus2.inch.toFloat() : state.forecastPrecip.precipDayPlus2.mm.toFloat()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDayMinus2", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus2.inch.toBigDecimal() : state.forecastPrecip.precipDayMinus2.mm.toBigDecimal()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDayMinus1", value: (isFahrenheit ? state.forecastPrecip.precipDayMinus1.inch.toBigDecimal() : state.forecastPrecip.precipDayMinus1.mm.toBigDecimal()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDay0", value: (isFahrenheit ? state.forecastPrecip.precipDay0.inch.toBigDecimal() : state.forecastPrecip.precipDay0.mm.toBigDecimal()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDayPlus1", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus1.inch.toBigDecimal() : state.forecastPrecip.precipDayPlus1.mm.toBigDecimal()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
+		sendEvent(name: "precipDayPlus2", value: (isFahrenheit ? state.forecastPrecip.precipDayPlus2.inch.toBigDecimal() : state.forecastPrecip.precipDayPlus2.mm.toBigDecimal()), unit: "${(isFahrenheit ? 'IN' : 'MM')}")
 	}
 
 	sendEventPublish(name: "mytile", value: mytext)
@@ -359,7 +365,7 @@ def pollHandler(resp, data) {
     //    	if (debugOutput) log.debug "wx-ApiXU returned: $obs"
 		doPoll(obs)		// parse the data returned by ApiXU
 	} else {
-		log.error "wx-ApiXU weather api did not return data: $resp"
+		log.error "wx-ApiXU weather api did not return data: $resp.data"
 	}
 }
 
@@ -396,7 +402,7 @@ def sunRiseSetHandler(resp, data) {
 		state.forecastPrecip.precipDayMinus2 = state?.forecastPrecip?.precipDayMinus1
 		state.forecastPrecip.precipDayMinus1 = state?.forecastPrecip?.precipDay0
 	} else {
-		log.warn "wx-ApiXU sunrise-sunset api did not return data: $resp"
+		log.warn "wx-ApiXU sunrise-sunset api did not return data: $resp.data"
 		state.sunRiseSet.init = false
 	}
 }
@@ -421,7 +427,7 @@ def updateLux() {
 		state.luxNext ? { schedule("0 0/${luxEvery} * * * ?", updateLux) } : {if (lowLuxEvery != 999) { schedule("0 0/${lowLuxEvery} * * * ?", updateLux) } }
         	//if (debugOutput) log.debug "Lux: $lux, $state.luxNext, $bwn"
       
-		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux")
+		sendEvent(name: "illuminance", value: lux.toInteger(), unit: "lux")
 		sendEventPublish(name: "illuminated", value: String.format("%,d lux", lux))
 		sendEventPublish(name: "betwixt", value: bwn)
 	} else {
@@ -521,20 +527,25 @@ def calcTime(wxData) {
 	imgNamePlus1 = getImgName(wxData.forecast.forecastday[0].day.condition.code, 1)
 	wind_mytile=(isFahrenheit ? "${Math.round(wxData.current.wind_mph)}" + " mph " : "${Math.round(wxData.current.wind_kph)}" + " kph ")
 	
-	// build the myTile text
-	mytext = wxData.location.name + ', ' + wxData.location.region
-	mytext += '<br>' + (isFahrenheit ? "${Math.round(wxData.current.temp_f)}" + '&deg;F ' : wxData.current.temp_c + '&deg;C ') + wxData.current.humidity + '%'
-	mytext += '<br>' + state?.localSunrise + ' <img style="height:2em" src=' + imgName + '> ' + state?.localSunset
-	mytext += (wind_mytile == (isFahrenheit ? "0 mph " : "0 kph ") ? '<br> Wind is calm' : '<br>' + wxData.current.wind_dir + ' ' + wind_mytile)
-	mytext += '<br>' + wxData.current.condition.text
-	//if (debugOutput) log.debug "mytext: $mytext"
 
-	state.forecastPrecip.precipDay0.mm = wxData.forecast.forecastday[0].day.totalprecip_mm
-	state.forecastPrecip.precipDay0.inch = wxData.forecast.forecastday[0].day.totalprecip_in
-	state.forecastPrecip.precipDayPlus1.mm = wxData.forecast.forecastday[1].day.totalprecip_mm
-	state.forecastPrecip.precipDayPlus1.inch = wxData.forecast.forecastday[1].day.totalprecip_in
-	state.forecastPrecip.precipDayPlus2.mm = wxData.forecast.forecastday[2].day.totalprecip_mm
-	state.forecastPrecip.precipDayPlus2.inch = wxData.forecast.forecastday[2].day.totalprecip_in
+	if (mytilePublish) { // don't bother setting these values if it's not enabled
+		// build the myTile text
+		mytext = wxData.location.name + ', ' + wxData.location.region
+		mytext += '<br>' + (isFahrenheit ? "${Math.round(wxData.current.temp_f)}" + '&deg;F ' : wxData.current.temp_c + '&deg;C ') + wxData.current.humidity + '%'
+		mytext += '<br>' + state?.localSunrise + ' <img style="height:2em" src=' + imgName + '> ' + state?.localSunset
+		mytext += (wind_mytile == (isFahrenheit ? "0 mph " : "0 kph ") ? '<br> Wind is calm' : '<br>' + wxData.current.wind_dir + ' ' + wind_mytile)
+		mytext += '<br>' + wxData.current.condition.text
+		//if (debugOutput) log.debug "mytext: $mytext"
+	}
+
+	if (precipExtendedPublish) { // don't bother setting these values if it's not enabled
+		state.forecastPrecip.precipDay0.mm = wxData.forecast.forecastday[0].day.totalprecip_mm
+		state.forecastPrecip.precipDay0.inch = wxData.forecast.forecastday[0].day.totalprecip_in
+		state.forecastPrecip.precipDayPlus1.mm = wxData.forecast.forecastday[1].day.totalprecip_mm
+		state.forecastPrecip.precipDayPlus1.inch = wxData.forecast.forecastday[1].day.totalprecip_in
+		state.forecastPrecip.precipDayPlus2.mm = wxData.forecast.forecastday[2].day.totalprecip_mm
+		state.forecastPrecip.precipDayPlus2.inch = wxData.forecast.forecastday[2].day.totalprecip_in
+	}
 }
 
 
