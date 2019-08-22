@@ -120,7 +120,7 @@ def updateLux()     {
 		state.luxNext = (lux > 6) ? true : false 
 		state.luxNext ? { schedule("0 0/${luxEvery} * * * ?", updateLux) } : {if (lowLuxEvery != 999) { schedule("0 0/${lowLuxEvery} * * * ?", updateLux) } }
 
-		sendEvent(name: "illuminance", value: lux.toFloat(), unit: "lux")
+		sendEvent(name: "illuminance", value: lux.toInteger(), unit: "lux")
 		sendEvent(name: "illuminated", value: String.format("%,d lux", lux))
 		sendEvent(name: "betwixt",     value: bwn)
         	if (debugOutput) log.debug "Lux: $lux, $state.luxNext, $bwn"
