@@ -269,6 +269,7 @@ def pollApixu() {
 	} else { if (descTextEnable) log.info "Luxuriant-ApiXU no Key - no offset of Lux by cloud cover." }
 }
 
+
 /*
 	pollHandler
 
@@ -287,6 +288,7 @@ def apixuHandler(resp, data) {
 		state?.apixu?.init = false
 	}
 }
+
 
 /*
 	getEpoch
