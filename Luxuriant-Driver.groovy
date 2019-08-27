@@ -22,13 +22,17 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v1.5.3"  }
+ public static String version()      {  return "v1.5.4"  }
 
 /***********************************************************************************************************************
  *
  *
+ * Version: 1.5.4
+ *			Increased Lux 'slices of a day' to include the next day.
+ *                Increased pollSunRiseSet to every 8 hours (3 times a day). 
+ *
  * Version: 1.5.3
- *                Corrected typing on illuminance to Integer.
+ *                Corrected illuminance to Integer type.
  *
  * Version: 1.5.2
  *                Moved the subscribe statements to initialize().
@@ -69,8 +73,10 @@ metadata
 
 		attribute "illuminated",   "string"
 		attribute "betwixt",       "string"
-	//	command "updateCheck"			// **---** delete for Release
+
+    		command "pollSunRiseSet"
 	//	command "pollApixu"			// **---** delete for Release
+	//	command "updateCheck"			// **---** delete for Release
 	}
 
       preferences 
@@ -101,8 +107,7 @@ def updated()
 	if (debugOutput) runIn(1800,logsOff)        // disable debug logs after 30 min
 	if (descTextEnable) log.info "Updated with settings: ${settings}, $state.tz_id, $state.sunRiseSet"
 	pollSunRiseSet
-	pollEvery = luxEvery
-	"runEvery${pollEvery}Minutes"(pollApixu) 
+	if (apixuKey) { schedule("3 0/${luxEvery} * * * ?", pollApixu) }
 }
 
 
@@ -118,7 +123,7 @@ def updateLux()     {
 		if (descTextEnable) log.info "Luxurient lux calc for: $location.latitude  $location.longitude"	
 		def (lux, bwn) = estimateLux(state.condition_code, state.cloud)
 		state.luxNext = (lux > 6) ? true : false 
-		state.luxNext ? { schedule("0 0/${luxEvery} * * * ?", updateLux) } : {if (lowLuxEvery != 999) { schedule("0 0/${lowLuxEvery} * * * ?", updateLux) } }
+		state.luxNext ? { schedule("7 0/${luxEvery} * * * ?", updateLux) } : {if (lowLuxEvery != 999) { schedule("0 0/${lowLuxEvery} * * * ?", updateLux) } }
 
 		sendEvent(name: "illuminance", value: lux.toInteger(), unit: "lux")
 		sendEvent(name: "illuminated", value: String.format("%,d lux", lux))
@@ -146,38 +151,71 @@ def estimateLux(condition_code, cloud)     {
 	def noonTimeMillis       = getEpoch(sunRiseSet.solar_noon)
 	def twilight_beginMillis = getEpoch(sunRiseSet.civil_twilight_begin)
 	def twilight_endMillis   = getEpoch(sunRiseSet.civil_twilight_end)
-	// log.debug "EpochMillis: now: $lT -> localMillis: $localeMillis, $sunRiseSet.civil_twilight_begin -> $twilight_beginMillis, Rise: $sunriseTimeMillis, Noon: $sunRiseSet.solar_noon -> $noonTimeMillis, Set: $sunsetTimeMillis, $sunRiseSet.civil_twilight_end -> $twilight_endMillis"
+	def twiStartNextMillis   = twilight_beginMillis + 86400000 // -->24*60*60*1000
+	def sunriseNextMillis    = sunriseTimeMillis + 86400000 // -->24*60*60*1000
+	def noonTimeNextMillis   = noonTimeMillis + 86400000 // -->24*60*60*1000
+	def sunsetNextMillis     = sunsetTimeMillis + 86400000 // -->24*60*60*1000
+	def twiEndNextMillis     = twilight_endMillis + 86400000 // -->24*60*60*1000
 
-	if (   localeMillis > twilight_beginMillis   && localeMillis < sunriseTimeMillis)  {
-		bwn = "between twilight and sunrise" 
-		l = (((localeMillis - twilight_beginMillis) * 50f) / (sunriseTimeMillis - twilight_beginMillis))
-		lux = (l < 10f ? 10l : l.trunc(0) as long)
-	}
-	else if (localeMillis > sunriseTimeMillis    && localeMillis < noonTimeMillis )    { 
-		bwn = "between sunrise and noon" 
-		l = (((localeMillis - sunriseTimeMillis) * 10000f) / (noonTimeMillis - sunriseTimeMillis))
-		lux = (l < 50f ? 50l : l.trunc(0) as long)
-	}
-	else if (localeMillis > noonTimeMillis       && localeMillis < sunsetTimeMillis)   {
-		bwn = "between noon and sunset" 
-		l = (((sunsetTimeMillis - localeMillis) * 10000f) / (sunsetTimeMillis - noonTimeMillis))
-		lux = (l < 50f ? 50l : l.trunc(0) as long)
-	}
-	else if (localeMillis > sunsetTimeMillis     && localeMillis < twilight_endMillis) {
-		bwn = "between sunset and twilight" 
-		l = (((twilight_endMillis - localeMillis) * 50f) / (twilight_endMillis - sunsetTimeMillis))
-		lux = (l < 10f ? 10l : l.trunc(0) as long)
-	}
-	else {
-		bwn = "Fully Night Time" 
-		lux = 5l
-		aFCC = false
+	switch(localeMillis) { 
+		case { it < twilight_beginMillis}: 
+			bwn = "Fully Night Time" 
+			lux = 5l
+			break
+		case { it < sunriseTimeMillis}:
+			bwn = "between twilight and sunrise" 
+			l = (((localeMillis - twilight_beginMillis) * 50f) / (sunriseTimeMillis - twilight_beginMillis))
+			lux = (l < 10f ? 10l : l.trunc(0) as long)
+			break
+		case { it < noonTimeMillis}:
+			bwn = "between sunrise and noon" 
+			l = (((localeMillis - sunriseTimeMillis) * 10000f) / (noonTimeMillis - sunriseTimeMillis))
+			lux = (l < 50f ? 50l : l.trunc(0) as long)
+			break
+		case { it < sunsetTimeMillis}:
+			bwn = "between noon and sunset" 
+			l = (((sunsetTimeMillis - localeMillis) * 10000f) / (sunsetTimeMillis - noonTimeMillis))
+			lux = (l < 50f ? 50l : l.trunc(0) as long)
+			break
+		case { it < twilight_endMillis}:
+			bwn = "between sunset and twilight" 
+			l = (((twilight_endMillis - localeMillis) * 50f) / (twilight_endMillis - sunsetTimeMillis))
+			lux = (l < 10f ? 10l : l.trunc(0) as long)
+			break
+		case { it < twiStartNextMillis}:
+			bwn = "Fully Night Time" 
+			lux = 5l
+			break
+		case { it < sunriseNextMillis}:
+			bwn = "between twilight and sunrise" 
+			l = (((localeMillis - twiStartNextMillis) * 50f) / (sunriseNextMillis - twiStartNextMillis))
+			lux = (l < 10f ? 10l : l.trunc(0) as long)
+			break
+		case { it < noonTimeNextMillis}:
+			bwn = "between sunrise and noon" 
+			l = (((localeMillis - sunriseNextMillis) * 10000f) / (noonTimeNextMillis - sunriseNextMillis))
+			lux = (l < 50f ? 50l : l.trunc(0) as long)
+			break
+		case { it < sunsetNextMillis}:
+			bwn = "between noon and sunset" 
+			l = (((sunsetNextMillis - localeMillis) * 10000f) / (sunsetNextMillis - noonTimeNextMillis))
+			lux = (l < 50f ? 50l : l.trunc(0) as long)
+			break
+		case { it < twiEndNextMillis}:
+			bwn = "between sunset and twilight" 
+			l = (((twiEndNextMillis - localeMillis) * 50f) / (twiEndNextMillis - sunsetNextMillis))
+			lux = (l < 10f ? 10l : l.trunc(0) as long)
+			break
+		default:
+			bwn = "Fully Night Time" 
+			lux = 5l
+			aFCC = false
+			break
 	}
 
 	// factor in cloud cover if available
 	cCF = state.apixu.init ? ((100 - (cloud.toInteger() / 3d)) / 100) : 0.998d
-   	// log.debug "zzz: $l $cloud $cCF, $lux, $bwn, $state.apixu.init"
-	lux = (lux * cCF) as long
+ 	lux = (lux * cCF) as long
 	
 	return [lux, bwn]
 }
@@ -206,12 +244,12 @@ def sunRiseSetHandler(resp, data) {
 		sunRiseSet = resp.getJson().results
         	updateDataValue("sunRiseSet", resp.getData())
 		state?.sunRiseSet?.init = true
-		//if (debugOutput) log.debug "sunRiseSet: $state.sunRiseSet"
+		//if (debugOutput) log.debug "sunRiseSet: $sunRiseSet"
 		state.localSunrise = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.sunrise).format("HH:mm")
 		state.localSunset  = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.sunset).format("HH:mm")
 		state.twiBegin     = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.civil_twilight_begin).format("HH:mm")
 		state.twiEnd       = new Date().parse("yyyy-MM-dd'T'HH:mm:ssXXX", sunRiseSet.civil_twilight_end).format("HH:mm")
-	} else { log.error "Sunrise-sunset api did not return data: $resp" }
+	} else { log.error "Sunrise-sunset api did not return data" }
 }
 
 
@@ -245,7 +283,7 @@ def apixuHandler(resp, data) {
 		state?.apixu?.init = true
 		state.cloud = obs.current.cloud
 	} else {
-		log.error "Luxuriant-ApiXU weather api did not return data: $resp"
+		log.error "Luxuriant-ApiXU weather api did not return data"
 		state?.apixu?.init = false
 	}
 }
@@ -292,10 +330,12 @@ def installed()
 def initialize()
 {
 	unschedule()
-	schedule("23 10 0 ? * * *", pollSunRiseSet)
+	schedule("17 20 0/8 ? * * *", pollSunRiseSet)
 	schedule("0 0 8 ? * FRI *", updateCheck)
-	schedule("0 0/${luxEvery} * * * ?", updateLux)
+	schedule("17 0/${luxEvery} * * * ?", updateLux)
 	state.tz_id = TimeZone.getDefault().getID()
+	//	state.remove("sunRiseSet") // converted to 'data' storage, no longer need 'state' storage.
+		state.remove("lowLuxRepeat") // using schedule(), no longer need 'state' storage.
 	if (state?.sunRiseSet?.init == null) state.sunRiseSet = [init:false]
 	if (state?.apixu?.init      == null) state.apixu      = [init:false]
 	runIn(4, updateLux) // give sunrise/set time to complete.
@@ -321,7 +361,7 @@ def logsOff(){
 def updateCheck()
 {    
 	
-	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU/version.json"]
+	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU/version2.json"]
 	
  	asynchttpGet("updateCheckHandler", paramsUD) 
 }
@@ -334,25 +374,26 @@ def updateCheckHandler(resp, data) {
 		respUD = parseJson(resp.data)
 		// log.warn " Version Checking - Response Data: $respUD"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
 		state.Copyright = "${thisCopyright}"
-		def newVerRaw = (respUD.versions.Driver.(state.InternalName))
-		def newVer = (respUD.versions.Driver.(state.InternalName).replaceAll("[.vV]", ""))
-		def currentVer = version().replaceAll("[.vV]", "")   
-		state.UpdateInfo = (respUD.versions.UpdateInfo.Driver.(state.InternalName))
+		// uses reformattted 'version2.json' 
+		def newVer = (respUD.driver.(state.InternalName).ver.replaceAll("[.vV]", ""))
+		def currentVer = version().replaceAll("[.vV]", "")                
+		state.UpdateInfo = (respUD.driver.(state.InternalName).updated)
+            // log.debug "updateCheck: ${respUD.driver.(state.InternalName).ver}, $state.UpdateInfo, ${respUD.author}"
 	
 		if(newVer == "NLS")
 		{
-		      state.Status = "<b>** This driver is no longer supported by $respUD.author  **</b>"       
-		      log.warn "** This driver is no longer supported by $respUD.author **"      
+		      state.Status = "<b>** This Driver is no longer supported by ${respUD.author}  **</b>"       
+		      log.warn "** This Driver is no longer supported by ${respUD.author} **"      
 		}           
 		else if(currentVer < newVer)
 		{
-		      state.Status = "<b>New Version Available (Version: $newVerRaw)</b>"
-		      log.warn "** There is a newer version of this driver available  (Version: $newVerRaw) **"
+		      state.Status = "<b>New Version Available (Version: ${respUD.driver.(state.InternalName).ver})</b>"
+		      log.warn "** There is a newer version of this Driver available  (Version: ${respUD.driver.(state.InternalName).ver}) **"
 		      log.warn "** $state.UpdateInfo **"
 		} 
 		else if(currentVer > newVer)
 		{
-		      state.Status = "<b>You are using a Test version of this Driver (Expecting: $newVerRaw)</b>"
+		      state.Status = "<b>You are using a Test version of this Driver (Expecting: ${respUD.driver.(state.InternalName).ver})</b>"
 		}
 		else
 		{ 
