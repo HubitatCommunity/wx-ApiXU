@@ -22,10 +22,16 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v1.5.4"  }
+ public static String version()      {  return "v1.5.6"  }
 
 /***********************************************************************************************************************
  *
+ *
+ * Version: 1.5.6
+ *                Added local_Sunrise and local_Sunset attributes because they're "free".
+ *
+ * Version: 1.5.5
+ *                Improved updateCheck() with Switch/Case.
  *
  * Version: 1.5.4
  *			Increased Lux 'slices of a day' to include the next day.
@@ -73,6 +79,8 @@ metadata
 
 		attribute "illuminated",   "string"
 		attribute "betwixt",       "string"
+		attribute "local_sunrise", "string"
+		attribute "local_sunset",  "string"
 
     		command "pollSunRiseSet"
 	//	command "pollApixu"			// **---** delete for Release
@@ -128,6 +136,10 @@ def updateLux()     {
 		sendEvent(name: "illuminance", value: lux.toInteger(), unit: "lux")
 		sendEvent(name: "illuminated", value: String.format("%,d lux", lux))
 		sendEvent(name: "betwixt",     value: bwn)
+
+		if (debugOutput) log.debug "localSunrise Group"
+		sendEvent(name: "local_sunrise", value: state.localSunrise)
+		sendEvent(name: "local_sunset",  value: state.localSunset)
         	if (debugOutput) log.debug "Lux: $lux, $state.luxNext, $bwn"
 	} else {
 		if (descTextEnable) log.info "no Luxurient lux without sunRiseSet value."
@@ -361,8 +373,7 @@ def logsOff(){
 
 // Check Version   ***** with great thanks and acknowlegment to Cobra (CobraVmax) for his original code ****
 def updateCheck()
-{    
-	
+{
 	def paramsUD = [uri: "https://hubitatcommunity.github.io/wx-ApiXU/version2.json"]
 	
  	asynchttpGet("updateCheckHandler", paramsUD) 
@@ -381,39 +392,28 @@ def updateCheckHandler(resp, data) {
 		def currentVer = version().replaceAll("[.vV]", "")                
 		state.UpdateInfo = (respUD.driver.(state.InternalName).updated)
             // log.debug "updateCheck: ${respUD.driver.(state.InternalName).ver}, $state.UpdateInfo, ${respUD.author}"
-	
-		if(newVer == "NLS")
-		{
-		      state.Status = "<b>** This Driver is no longer supported by ${respUD.author}  **</b>"       
-		      log.warn "** This Driver is no longer supported by ${respUD.author} **"      
-		}           
-		else if(currentVer < newVer)
-		{
-		      state.Status = "<b>New Version Available (Version: ${respUD.driver.(state.InternalName).ver})</b>"
-		      log.warn "** There is a newer version of this Driver available  (Version: ${respUD.driver.(state.InternalName).ver}) **"
-		      log.warn "** $state.UpdateInfo **"
-		} 
-		else if(currentVer > newVer)
-		{
-		      state.Status = "<b>You are using a Test version of this Driver (Expecting: ${respUD.driver.(state.InternalName).ver})</b>"
+
+		switch(newVer) {
+			case { it == "NLS"}:
+			      state.Status = "<b>** This Driver is no longer supported by ${respUD.author}  **</b>"       
+			      log.warn "** This Driver is no longer supported by ${respUD.author} **"      
+				break
+			case { it > currentVer}:
+			      state.Status = "<b>New Version Available (Version: ${respUD.driver.(state.InternalName).ver})</b>"
+			      log.warn "** There is a newer version of this Driver available  (Version: ${respUD.driver.(state.InternalName).ver}) **"
+			      log.warn "** $state.UpdateInfo **"
+				break
+			case { it < currentVer}:
+			      state.Status = "<b>You are using a Test version of this Driver (Expecting: ${respUD.driver.(state.InternalName).ver})</b>"
+				break
+			default:
+				state.Status = "Current"
+				if (descTextEnable) log.info "You are using the current version of this driver"
+				break
 		}
-		else
-		{ 
-		    state.Status = "Current"
-		    if (descTextEnable) log.info "You are using the current version of this driver"
-		}
-	
-	      if(state.Status == "Current")
-	      {
-	           state.UpdateInfo = "N/A"
-	           sendEvent(name: "DriverUpdate", value: state.UpdateInfo)
-	           sendEvent(name: "DriverStatus", value: state.Status)
-	      }
-	      else 
-	      {
-	           sendEvent(name: "DriverUpdate", value: state.UpdateInfo)
-	           sendEvent(name: "DriverStatus", value: state.Status)
-	      }
+
+	      sendEvent(name: "chkUpdate", value: state.UpdateInfo)
+	      sendEvent(name: "chkStatus", value: state.Status)
       }
       else
       {
