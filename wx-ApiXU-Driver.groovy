@@ -6,9 +6,12 @@
  *
  ***********************************************************************************************************************/
 
-public static String version()      {  return "v1.4.5"  }
+public static String version()      {  return "v1.4.6"  }
 
 /***********************************************************************************************************************
+ *
+ * Version: 1.4.6
+ *                Updated image Icon library location.
  *
  * Version: 1.4.5
  *                Improved updateCheck() with Switch/Case.
@@ -677,7 +680,7 @@ def getOWIconName(condition_code, is_day)     {
 
 */
 def getImgName(wCode, is_day)       {
-	def url = "https://raw.githubusercontent.com/csteele-PD/ApiXU/master/docs/weather/"
+	def url = "https://raw.githubusercontent.com/HubitatCommunity/wx-ApiXU/master/docs/weather/"
 	def imgItem = isDay ? imgCondMap[wCode].imgNames.night_img : imgCondMap[wCode].imgNames.day_img
 	// log.debug "getImgName: $wCode, $imgItem"
 	return (url + imgItem)
