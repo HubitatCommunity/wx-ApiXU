@@ -12,6 +12,7 @@ public static String version()      {  return "v1.4.6"  }
  *
  * Version: 1.4.6
  *                Updated image Icon library location.
+ *                Made all 'wind' related attributes use .toBigDecimal
  *
  * Version: 1.4.5
  *                Improved updateCheck() with Switch/Case.
@@ -263,7 +264,7 @@ def doPoll(obs) {
 	if (open_weatherPublish) {
 		if (debugOutput) log.debug "open_weather Group"
 		sendEvent(name: "weatherIcons", value: getOWIconName(obs.current.condition.code, obs.current.is_day))
-		sendEvent(name: "windSpeed", value: (isFahrenheit ? obs.current.wind_mph.toInteger() : obs.current.wind_kph.toInteger()))
+		sendEvent(name: "windSpeed", value: (isFahrenheit ? obs.current.wind_mph.toBigDecimal() : obs.current.wind_kph.toBigDecimal()))
 		sendEvent(name: "windDirection", value: obs.current.wind_degree.toInteger())
 	}
 	if (tempHiLowPublish) {
@@ -311,7 +312,7 @@ def doPoll(obs) {
 	sendEventPublish(name: "wind_degree", value: obs.current.wind_degree.toInteger(), unit: "DEGREE")
 	sendEventPublish(name: "wind_dir", value: obs.current.wind_dir)
 	sendEventPublish(name: "wind_mytile", value: wind_mytile)
-	sendEventPublish(name: "wind", value: (isFahrenheit ? obs.current.wind_mph.toInteger() : obs.current.wind_kph.toInteger()), unit: "${(isFahrenheit ? 'MPH' : 'KPH')}")
+	sendEventPublish(name: "wind", value: (isFahrenheit ? obs.current.wind_mph.toBigDecimal() : obs.current.wind_kph.toBigDecimal()), unit: "${(isFahrenheit ? 'MPH' : 'KPH')}")
 
 	if (isFahrenheit)	{
 		sendEventPublish(name: "wind_mph", value: obs.current.wind_mph.toBigDecimal(), unit: "MPH")
