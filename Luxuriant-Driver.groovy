@@ -22,10 +22,13 @@
  *  for use with HUBITAT, so no tiles
  */
  
- public static String version()      {  return "v1.5.6"  }
+ public static String version()      {  return "v1.6.0"  }
 
 /***********************************************************************************************************************
  *
+ *
+ * Version: 1.6.0
+ *                Added DarkSky integration
  *
  * Version: 1.5.6
  *                Added local_Sunrise and local_Sunset attributes because they're "free".
@@ -82,19 +85,20 @@ metadata
 		attribute "local_sunrise", "string"
 		attribute "local_sunset",  "string"
 
-    		command "pollSunRiseSet"
-	//	command "pollApixu"			// **---** delete for Release
-	//	command "updateCheck"			// **---** delete for Release
+		command "pollSunRiseSet"
+	//	command "pollForClouds"			/// **---** delete for Release
+	//	command "updateCheck"			/// **---** delete for Release
 	}
 
       preferences 
       {
-		input "apixuKey",      "text", title:"ApiXU key?", description: "<br><i>Leave blank for no Cloud compensation.</i><p>", required:true, defaultValue:null
-		input "luxEvery",      "enum", title:"Publish illuminance how frequently?", required:false, defaultValue: 5, options:[5:"5 minutes",10:"10 minutes",15:"15 minutes",30:"30 minutes"]
-		input "lowLuxEvery",   "enum", title:"When illuminance is minimum, how frequently is it published?", required:false, defaultValue: 999, options:[999: "don't change", 5:"5 minutes",10:"10 minutes",15:"15 minutes",30:"30 minutes"]
+		input "weatherKey",    "text", title:"<b>Weather key?</b>", description: "<br><i>Leave blank for no Cloud compensation.</i><p>", required:true, defaultValue:null
+		input "whichSite",     "enum", title:"<b>Which Weather Site?</b>", required:false, defaultValue: false, options:[false: "use ApiXU", true: "use DarkSky"]
+		input "luxEvery",      "enum", title:"<b>Publish illuminance how frequently?</b>", required:false, defaultValue: 5, options:[5:"5 minutes",10:"10 minutes",15:"15 minutes",30:"30 minutes"]
+		input "lowLuxEvery",   "enum", title:"<b>When illuminance is minimum, how frequently is it published</b>?", required:false, defaultValue: 999, options:[999: "don't change", 5:"5 minutes",10:"10 minutes",15:"15 minutes",30:"30 minutes"]
 
     	 // standard logging options
-		input name: "debugOutput",    type: "bool", title: "Enable debug logging", defaultValue: true
+		input name: "debugOutput",    type: "bool", title: "<b>Enable debug logging</b>", defaultValue: true
 		input name: "descTextEnable", type: "bool", title: "<b>Enable descriptionText logging?</b>", defaultValue: true
       }
 }
@@ -115,7 +119,8 @@ def updated()
 	if (debugOutput) runIn(1800,logsOff)        // disable debug logs after 30 min
 	if (descTextEnable) log.info "Updated with settings: ${settings}, $state.tz_id, $state.sunRiseSet"
 	pollSunRiseSet
-	if (apixuKey) { schedule("3 0/${luxEvery} * * * ?", pollApixu) }
+	if (whichSite == "true") { state.wxClouds.name = "Luxuriant-DarkSky"; state.wxClouds.is = true } else { state.wxClouds.name = "Luxuriant-Apixu"; state.wxClouds.is = false }
+	if (weatherKey) schedule("3 0/${luxEvery} * * * ?", pollForClouds)
 }
 
 
@@ -137,7 +142,6 @@ def updateLux()     {
 		sendEvent(name: "illuminated", value: String.format("%,d lux", lux))
 		sendEvent(name: "betwixt",     value: bwn)
 
-		if (debugOutput) log.debug "localSunrise Group"
 		sendEvent(name: "local_sunrise", value: state.localSunrise)
 		sendEvent(name: "local_sunset",  value: state.localSunset)
         	if (debugOutput) log.debug "Lux: $lux, $state.luxNext, $bwn"
@@ -226,7 +230,7 @@ def estimateLux(condition_code, cloud)     {
 	}
 
 	// factor in cloud cover if available
-	cCF = state.apixu.init ? ((100 - (cloud.toInteger() / 3d)) / 100) : 0.998d
+	cCF = state?.wxClouds?.init ? ((100 - (cloud.toInteger() / 3d)) / 100) : 0.998d
  	lux = (lux * cCF) as long
 	
 	return [lux, bwn]
@@ -266,40 +270,42 @@ def sunRiseSetHandler(resp, data) {
 
 
 /*
-	poll
+	pollForClouds
 
 	Purpose: initiate the asynchtttpGet() call each poll cycle.
 
 	Notes: very, very simple, all the action is in the handler.
 */
-def pollApixu() {
-	state?.apixu?.init = false
-	if (apixuKey) {
-		def requestParams = [ uri: "https://api.apixu.com/v1/current.json?key=$apixuKey&q=$location.latitude,$location.longitude&days=3" ]
-		if (descTextEnable) log.info "Luxuriant-ApiXU poll for Cloud Data " //: $requestParams"
-		asynchttpGet("apixuHandler", requestParams)
-	} else { if (descTextEnable) log.info "Luxuriant-ApiXU no Key - no offset of Lux by cloud cover." }
+def pollForClouds() {
+	state?.wxClouds?.init = false
+	def requestParams = ''
+	if (weatherKey) {
+		if (state.wxClouds.is) { requestParams = [ uri: "https://api.darksky.net/forecast/${weatherKey}/" + location.latitude + ',' + location.longitude + "?units=us&exclude=minutely,hourly,flags" ] } else { requestParams = [ uri: "https://api.apixu.com/v1/current.json?key=$weatherKey&q=$location.latitude,$location.longitude&days=3" ] }
+		if (descTextEnable) log.info "$state.wxClouds.name poll for Cloud Data : $requestParams"
+		asynchttpGet("forCloudsHandler", requestParams)
+	} else { if (descTextEnable) log.info "$state.wxClouds.name no Key - no offset of Lux by cloud cover." }
 }
 
 
 /*
-	pollHandler
+	forCloudsHandler
 
-	Purpose: the APIXU website response
+	Purpose: the WX site's response
 
-	Notes: a good response will be processed by doPoll()
 */
-def apixuHandler(resp, data) {
+def forCloudsHandler(resp, data) {
 	if(resp.getStatus() == 200 || resp.getStatus() == 207) {
 		obs = parseJson(resp.data)
-        	if (debugOutput) log.debug "Luxuriant-ApiXU returned: $obs"
-		state?.apixu?.init = true
-		state.cloud = obs.current.cloud
+      //  	if (debugOutput) log.debug "$state.wxClouds.name returned: $obs"
+		state?.wxClouds?.init = true
+		if (state.wxClouds.is) {state.cloud = obs.currently.cloudCover} else {state.cloud = obs.current.cloud}
+		sendEvent(name: "cloud", value: state.cloud.toBigDecimal(), unit: "%")
 	} else {
-		log.error "Luxuriant-ApiXU weather api did not return data"
-		state?.apixu?.init = false
+		log.error "$state.wxClouds.name weather api did not return data"
+		state?.wxClouds?.init = false
 	}
 }
+
 
 
 /*
@@ -332,7 +338,7 @@ def getEpoch (aTime) {
 def installed()
 {
 	initialize()
-	log.trace "Msg: installed ran"
+	log.trace "Installed ran"
 }
 
 
@@ -349,12 +355,13 @@ def initialize()
 	schedule("17 0/${luxEvery} * * * ?", updateLux)
 	state.tz_id = TimeZone.getDefault().getID()
 	//	state.remove("sunRiseSet") // converted to 'data' storage, no longer need 'state' storage.
-		state.remove("lowLuxRepeat") // using schedule(), no longer need 'state' storage.
-	if (state?.sunRiseSet?.init == null) state.sunRiseSet = [init:false]
-	if (state?.apixu?.init      == null) state.apixu      = [init:false]
+	//	state.remove("lowLuxRepeat") // using schedule(), no longer need 'state' storage.
+	if (state?.sunRiseSet?.init == null) state.sunRiseSet  = [init:false]
+	if (state?.wxClouds?.init   == null) state.wxClouds = [init:false]
 	runIn(4, updateLux) // give sunrise/set time to complete.
 	runIn(20, updateCheck) 
-	log.trace "Msg: initialize ran"
+	state.DarkSky = "<a href='https://darksky.net/poweredby/'>Powered by Dark Sky</a>"
+	log.trace "Initialize ran"
 }
 
 
@@ -385,26 +392,27 @@ def updateCheckHandler(resp, data) {
 
 	if (resp.getStatus() == 200 || resp.getStatus() == 207) {
 		respUD = parseJson(resp.data)
-		// log.warn " Version Checking - Response Data: $respUD"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
-		state.Copyright = "${thisCopyright}"
+		// if (debugOutput) log.debug " Version Checking - Response Data: $respUD"   // Troubleshooting Debug Code - Uncommenting this line should show the JSON response from your webserver 
+		state.Copyright = "${thisCopyright} -- ${version()}"
 		// uses reformattted 'version2.json' 
-		def newVer = (respUD.driver.(state.InternalName).ver.replaceAll("[.vV]", ""))
-		def currentVer = version().replaceAll("[.vV]", "")                
+		def newVer = padVer(respUD.driver.(state.InternalName).ver)
+		def currentVer = padVer(version())               
 		state.UpdateInfo = (respUD.driver.(state.InternalName).updated)
-            // log.debug "updateCheck: ${respUD.driver.(state.InternalName).ver}, $state.UpdateInfo, ${respUD.author}"
+            // if (debugOutput) log.debug "updateCheck: ${respUD.driver.(state.InternalName).ver}, $state.UpdateInfo, ${respUD.author}"
 
 		switch(newVer) {
 			case { it == "NLS"}:
 			      state.Status = "<b>** This Driver is no longer supported by ${respUD.author}  **</b>"       
-			      log.warn "** This Driver is no longer supported by ${respUD.author} **"      
+			      if (descTextEnable) log.warn "** This Driver is no longer supported by ${respUD.author} **"      
 				break
 			case { it > currentVer}:
 			      state.Status = "<b>New Version Available (Version: ${respUD.driver.(state.InternalName).ver})</b>"
-			      log.warn "** There is a newer version of this Driver available  (Version: ${respUD.driver.(state.InternalName).ver}) **"
-			      log.warn "** $state.UpdateInfo **"
+			      if (descTextEnable) log.warn "** There is a newer version of this Driver available  (Version: ${respUD.driver.(state.InternalName).ver}) **"
+			      if (descTextEnable) log.warn "** $state.UpdateInfo **"
 				break
 			case { it < currentVer}:
 			      state.Status = "<b>You are using a Test version of this Driver (Expecting: ${respUD.driver.(state.InternalName).ver})</b>"
+			      if (descTextEnable) log.warn "You are using a Test version of this Driver (Expecting: ${respUD.driver.(state.InternalName).ver})"
 				break
 			default:
 				state.Status = "Current"
@@ -412,13 +420,25 @@ def updateCheckHandler(resp, data) {
 				break
 		}
 
-	      sendEvent(name: "chkUpdate", value: state.UpdateInfo)
-	      sendEvent(name: "chkStatus", value: state.Status)
+ 	sendEvent(name: "chkUpdate", value: state.UpdateInfo)
+	sendEvent(name: "chkStatus", value: state.Status)
       }
       else
       {
            log.error "Something went wrong: CHECK THE JSON FILE AND IT'S URI"
       }
+}
+
+/*
+	padVer
+
+	Version progression of 1.4.9 to 1.4.10 would mis-compare unless each column is padded into two-digits first.
+
+*/ 
+def padVer(ver) {
+	def pad = ""
+	ver.replaceAll( "[vV]", "" ).split( /\./ ).each { pad += it.padLeft( 2, '0' ) }
+	return pad
 }
 
 def getThisCopyright(){"&copy; 2019 C Steele "}
