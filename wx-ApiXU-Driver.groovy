@@ -1,3 +1,10 @@
+DEPRECATED
+
+Code no longer maintained.
+	
+APIXU was acquired by WeatherStack and no longer offers the Free resources this code was based upon.
+
+
 /***********************************************************************************************************************
  * Import URL: https://raw.githubusercontent.com/HubitatCommunity/wx-ApiXU/master/wx-ApiXU-Driver.groovy
  *  Copyright 2018 CSteele
