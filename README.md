@@ -1,3 +1,11 @@
+DEPRECATED
+
+Code no longer maintained.
+
+APIXU was acquired by WeatherStack and no longer offers the Free resources this code was based upon.
+
+
+
 # ApiXU
 <p>
 <h2> Hubitat Driver to selectively acquire weather and attributes.</h2>
