@@ -13,7 +13,7 @@ the angle of the sun. Assuming a max Outdoor Lux of 10000 the sun's angle is fac
 <hr>
 <p>
 <hr>
-APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  
+APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED 
 
 DEPRECATED
 
@@ -23,9 +23,9 @@ APIXU was acquired by WeatherStack and no longer offers the Free resources this 
 
 
 
-# ApiXU
+ApiXU
 <p>
-<h2> Hubitat Driver to selectively acquire weather and attributes.</h2>
+Hubitat Driver to selectively acquire weather and attributes.
 <p>
 <b>-- == Release v1.3 == –</b>
 <p>
