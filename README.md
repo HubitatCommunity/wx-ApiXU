@@ -10,9 +10,9 @@ Luxuriant uses your Hub's Latitude, Longitude and Time/Time Zone to calculate a 
 the angle of the sun. Assuming a max Outdoor Lux of 10000 the sun's angle is factored in to produce a value taht would be roughly equivilant to a cloudless day. Optionally, adding a DarkSky key will allow for your local / regional cloud cover value to also be factored into the calculation.
   
 <p>
+<hr>
 <p>
-<p>
-<p>
+<hr>
 APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  
 
 DEPRECATED
