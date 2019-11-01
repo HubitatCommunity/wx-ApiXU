@@ -13,17 +13,17 @@ the angle of the sun. Assuming a max Outdoor Lux of 10000 the sun's angle is fac
 <hr>
 <p>
 <hr>
-APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED 
+wx-APIXU-Driver DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED  APIXU DEPRECATED 
 
-DEPRECATED
+wx-APIXU-Driver DEPRECATED
 
-Code no longer maintained.
+wx-APIXU-Driver Code no longer maintained.
 
 APIXU was acquired by WeatherStack and no longer offers the Free resources this code was based upon.
 
 
 
-ApiXU
+wx-APIXU-Driver
 <p>
 Hubitat Driver to selectively acquire weather and attributes.
 <p>
