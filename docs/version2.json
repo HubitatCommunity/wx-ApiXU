@@ -6,6 +6,7 @@
 	},
 	"driver": {
 		"wx-ApiXU-Driver": {"ver": "NLS", "updated": "01/11/2019"},
-		"Luxuriant-Driver":  {"ver": "1.6.0", "updated": "25/09/2019"}
+		"Luxuriant-Driver":  {"ver": "1.6.0", "updated": "25/09/2019"},
+		"EtherRain": {"ver": "0.3", "updated": "01/21/2019"}
 	}
 }
